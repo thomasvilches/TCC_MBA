@@ -12,8 +12,9 @@ Thomas Nogueira Vilches
   - Dados IBGE
     - Idade OK
     - Sexo OK
-    - Renda
-    - Cor/Raça
+    - Alfabetizacao OK
+    - Cor/Raça OK
+    - Renda OK
     - Outros?
 - Dados SIA-PA
   - Substituir os índices com as tabelas consolidadas

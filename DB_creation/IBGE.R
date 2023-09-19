@@ -152,3 +152,158 @@ odbc::dbWriteTable(
   db, name = "ibge_idade", value = dados,
   row.names = FALSE, append = TRUE
 )
+
+
+# Raça
+
+
+dados <- readxl::read_xls("../Dados/sao_paulo_20190207/Tabela 4.20.2.1.xls", sheet = 1, range = "R89C1:R1769C9", col_names = FALSE)
+
+ncol(dados)
+
+names(dados) <- c("cidade", "total", "branca", "preta", "amarela",
+                  "parda", "indigena", "sem_declaracao", "codibge")
+
+dados <- dados %>% 
+  select(-cidade) %>% 
+  mutate(
+    codibge = as.character(codibge)
+  ) %>% 
+  filter(str_length(codibge) == 7) %>% 
+  left_join(cities, by = "codibge") %>% 
+  select(-codibge, -cidade) %>% 
+  rename(id_mun = idmun)
+
+
+dados <- dados %>% 
+  relocate(id_mun)
+
+dados <- dados %>% 
+  mutate_at(
+    vars(seq(2, 8)),
+    as.integer
+  )
+
+
+
+msg <- paste("CREATE TABLE ibge_raca (
+  idmunraca SERIAL PRIMARY KEY,
+  id_mun INTEGER,",
+             paste(names(dados)[seq(2, 8)], " INTEGER", collapse = ","),
+             ");")
+
+odbc::dbSendQuery(db, msg)
+
+read_any(db, "ibge_raca")
+
+odbc::dbWriteTable(
+  db, name = "ibge_raca", value = dados,
+  row.names = FALSE, append = TRUE
+)
+
+
+
+# alfabetização
+
+
+dados <- readxl::read_xls("../Dados/sao_paulo_20190207/Tabela 4.20.4.1.xls", sheet = 1, range = "R89C1:R1769C11", col_names = FALSE)
+
+ncol(dados)
+
+names(dados) <- c("cidade", "total", "total_homens", "total_mulheres",
+                  "alf_total", "alf_homens", "alf_mulheres",
+                  "taxa_total", "taxa_homens", "taxa_mulheres", "codibge")
+
+dados <- dados %>% 
+  select(-cidade) %>% 
+  mutate(
+    codibge = as.character(codibge)
+  ) %>% 
+  filter(str_length(codibge) == 7) %>% 
+  left_join(cities, by = "codibge") %>% 
+  select(-codibge, -cidade) %>% 
+  rename(id_mun = idmun)
+
+
+dados <- dados %>% 
+  relocate(id_mun)
+
+ncol(dados)
+glimpse(dados)
+
+dados <- dados %>% 
+  mutate_at(
+    vars(seq(2, 7)),
+    as.integer
+  )
+
+
+
+msg <- paste("CREATE TABLE ibge_alfabetizacao (
+  idmunalf SERIAL PRIMARY KEY,
+  id_mun INTEGER,",
+             paste(names(dados)[seq(2, 7)], " INTEGER", collapse = ","),
+             ",",
+             paste(names(dados)[seq(8, 10)], " NUMERIC", collapse = ","),
+             ");")
+
+odbc::dbSendQuery(db, msg)
+
+read_any(db, "ibge_alfabetizacao")
+
+odbc::dbWriteTable(
+  db, name = "ibge_alfabetizacao", value = dados,
+  row.names = FALSE, append = TRUE
+)
+
+# drop_table(db, "ibge_alfabetizacao")
+
+# renda
+
+
+dados <- readxl::read_xls("../Dados/sao_paulo_20190207/Tabela 4.20.7.1.xls", sheet = 1, range = "R89C1:R1769C11", col_names = FALSE)
+
+ncol(dados)
+glimpse(dados)
+
+names(dados) <- c("cidade", "total", "ate_meio", "de_meioa1", "de_1a2",
+                  "de_2a5", "de_5a10", "de_10a20", "s_20plus", "sem_rendimento", "codibge")
+
+
+dados <- dados %>% 
+  select(-cidade) %>% 
+  mutate(
+    codibge = as.character(codibge)
+  ) %>% 
+  filter(str_length(codibge) == 7) %>% 
+  left_join(cities, by = "codibge") %>% 
+  select(-codibge, -cidade) %>% 
+  rename(id_mun = idmun)
+
+glimpse(dados)
+
+dados <- dados %>% 
+  relocate(id_mun)
+
+dados <- dados %>% 
+  mutate_at(
+    vars(seq(2, 10)),
+    as.integer
+  )
+
+
+
+msg <- paste("CREATE TABLE ibge_renda (
+  idmunrenda SERIAL PRIMARY KEY,
+  id_mun INTEGER,",
+             paste(names(dados)[seq(2, 10)], " INTEGER", collapse = ","),
+             ");")
+
+odbc::dbSendQuery(db, msg)
+
+read_any(db, "ibge_renda")
+
+odbc::dbWriteTable(
+  db, name = "ibge_renda", value = dados,
+  row.names = FALSE, append = TRUE
+)
