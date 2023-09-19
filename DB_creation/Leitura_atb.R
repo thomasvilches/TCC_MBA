@@ -1,13 +1,5 @@
 
-library(read.dbc)
-library(foreign)
-library(tidyverse)
-
-install.packages("RPostgreSQL")
-install.packages("odbc")
-library("RPostgreSQL")
-library(odbc)
-
+source("DB_creation/packages.R", encoding = "UTF-8")
 
 # ?dbWriteTable
 
