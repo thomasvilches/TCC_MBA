@@ -1,17 +1,10 @@
 
 source("DB_creation/packages.R", encoding = "UTF-8")
+source("DB_creation/functions.R", encoding = "UTF-8")
 
 # ?dbWriteTable
 
-senha <- read.table("senha.txt")
-
-db <- DBI::dbConnect(odbc::odbc(),
-                     Driver = "{PostgreSQL ODBC Driver(ANSI)}",
-                     Database = "DATASUS_PA",
-                     UserName = senha$V1[1],
-                     Password = senha$V1[2],
-                     Servername = "localhost",
-                     Port = 5433)
+db <- conecta_base()
 
 
 # baixado de arquivos para tabulaçao

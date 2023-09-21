@@ -4,62 +4,10 @@ source("DB_creation/functions.R", encoding = "UTF-8")
 source("DB_creation/packages.R", encoding = "UTF-8")
 
 
-
-# Checando CNES -----------------------------------------------------------
-
-cnes <- fetch_datasus(year_start = 2015, year_end = 2015, month_start = 1, month_end = 4, uf = "SP", information_system = "CNES-ST")
-cnes <- fetch_datasus(year_start = 2015, year_end = 2020, month_start = 1, month_end = 12, uf = "SP", information_system = "CNES-ST")
-
-glimpse(cnes)  
+db <- conecta_base()
 
 
-# A FIOCRUZ possui um dicionário de variaveis melhor
-# https://pcdas.icict.fiocruz.br/conjunto-de-dados/cadastro-nacional-de-estabelecimentos-de-saude/dicionario-de-variaveis/
-
-# Vamos juntar leitos e salas por urgencia e emergencia, ambulatoriais, obstétricos, centro cirurgico e neonatal
-
-colunas <- c(
-  "CNES",
-  "CODUFMUN",
-  "COD_CEP",
-  "CPF_CNPJ",
-  "PF_PJ",
-  "COD_IR",
-  "REGSAUDE",
-  "MICR_REG",
-  "DISTRSAN",
-  "VINC_SUS",
-  "ATIVIDAD",
-  "TP_UNID",
-  "DT_PUBLM",
-  "DT_PUBLE",
-  "DT_EXPED",
-  "ALVARA",
-  "AV_ACRED",
-  "DT_ACRED",
-  "AV_PNASS",
-  "DT_PNASS",
-  "NIVATE_A",
-  "NIVATE_H",
-  "LEITHOSP",
-  "URGEMERG",
-  "ATENDAMB",
-  "CENTRCIR",
-  "CENTROBS",
-  "CENTRNEO",
-  "ATENDHOS",
-  "ATEND_PR",
-  "DT_ATUAL",
-  "COMPETEN"
-)
-
-# QTLEIT
-# QTINST
-
-df <- cnes %>% 
-  select(all_of(colunas), starts_with("QTLEIT"), starts_with("QTINST"))
-
-glimpse(df)
+# Criando tabelas auxiliares ----------------------------------------------
 
 ### PF_PJ
 pfpj <- data.frame(codpjpf= c("1", "3"), descpjpf = c("PF", "PJ"))
@@ -147,13 +95,100 @@ odbc::dbWriteTable(
 )
 
 
-# Ajeitando Datas ---------------------------------------------------------
+# Checando CNES -----------------------------------------------------------
 
-df$DT_ACRED %>% unique
-df$DT_PUBLE %>% unique
-df$DT_ATUAL %>% unique
-df$DT_EXPED %>% unique
-df$COMPETEN %>% unique
+cnes <- fetch_datasus(year_start = 2015, year_end = 2015, month_start = 1, month_end = 4, uf = "SP", information_system = "CNES-ST")
+# cnes <- fetch_datasus(year_start = 2015, year_end = 2020, month_start = 1, month_end = 12, uf = "SP", information_system = "CNES-ST")
+
+glimpse(cnes)  
+
+
+# A FIOCRUZ possui um dicionário de variaveis melhor
+# https://pcdas.icict.fiocruz.br/conjunto-de-dados/cadastro-nacional-de-estabelecimentos-de-saude/dicionario-de-variaveis/
+
+# Vamos juntar leitos e salas por urgencia e emergencia, ambulatoriais, obstétricos, centro cirurgico e neonatal
+
+
+
+# -------------------------------------------------------------------------
+
+
+# Baixei os dados e vou fazer a extração de todos
+
+files <- list.files("../Dados/CNES_2015_2020/", full.names = TRUE)
+
+Ano = 1
+cnes <- lapply(files[(12*(Ano-1)+1):(12*Ano)], read.dbc::read.dbc)
+
+cnes <- Reduce(bind_rows, cnes)
+nrow(cnes)
+
+
+# Limpando os dados -------------------------------------------------------
+
+
+
+colunas <- c(
+  "CNES",
+  "CODUFMUN",
+  "COD_CEP", 
+  "CPF_CNPJ",
+  "PF_PJ",
+  "COD_IR",
+  "REGSAUDE",
+  "MICR_REG",
+  "DISTRSAN",
+  "VINC_SUS",
+  "ATIVIDAD",
+  "TP_UNID",
+  "DT_PUBLM",
+  "DT_PUBLE",
+  "DT_EXPED",
+  "ALVARA",
+  "AV_ACRED",
+  "DT_ACRED",
+  "AV_PNASS",
+  "DT_PNASS",
+  "NIVATE_A",
+  "NIVATE_H",
+  "LEITHOSP",
+  "URGEMERG",
+  "ATENDAMB",
+  "CENTRCIR",
+  "CENTROBS",
+  "CENTRNEO",
+  "ATENDHOS",
+  "ATEND_PR",
+  "DT_ATUAL",
+  "COMPETEN"
+)
+
+# QTLEIT
+# QTINST
+
+df <- cnes %>% 
+  select(all_of(colunas), starts_with("QTLEIT"), starts_with("QTINST"))
+
+glimpse(df)
+
+df %>% group_by(cnes) %>% summarise(n = n()) %>% filter(n>1) %>% nrow
+df %>% group_by(cnes) %>% summarise(n = n()) %>% filter(n>1) %>% arrange(desc(cnes))
+df %>% pull(cnes) %>% unique %>% length
+
+df %>% filter(cnes == "8016577") %>% View
+
+
+df %>% group_by(cnes) %>% 
+  summarise(
+    n = n()
+  ) %>% filter(n > 1) %>% arrange(n)
+# Ajeitando Datas ---------------------------------------------------------
+# 
+# df$DT_ACRED %>% unique
+# df$DT_PUBLE %>% unique
+# df$DT_ATUAL %>% unique
+# df$DT_EXPED %>% unique
+# df$COMPETEN %>% unique
 
 
 df <- df %>% 
@@ -168,7 +203,7 @@ df <- df %>%
     COMPETEN = change_date(COMPETEN)
   ) %>% ungroup()
 
-View(df)
+# View(df)
 
 
 
@@ -205,4 +240,57 @@ df <- df %>%
   select(-TP_UNID, -desctpest) %>% 
   rename(id_tpest = idtpest)
 
+# Municipio
+df %>% pull(CODUFMUN) %>% unique
 
+
+
+mun <- read_any(db, "ibge_cidades")
+
+df <- mun %>% 
+  mutate(
+    code6 = str_remove(codibge, ".$")
+  ) %>% 
+  right_join(df, by = c("code6" = "CODUFMUN")) %>% 
+  select(-codibge, -cidade,-code6) %>% 
+  rename(
+    id_mun = idmun
+  )
+
+head(df)
+
+df <- df %>% 
+  relocate(
+    CNES,
+    starts_with("id_"),
+    starts_with("DT_"),
+    COMPETEN
+  )
+
+glimpse(df)
+
+names(df) <- tolower(names(df))
+
+tipos <- dbDataType(db, df)
+
+msg <- paste("CREATE TABLE cnes_data (
+  idcnesdata SERIAL PRIMARY KEY,",
+             paste(names(df)," ", tipos[names(df)], collapse = ",\n"),
+             ");")
+
+
+cat(msg)
+if(!"cnes_data" %in% dbListTables(db, schema = "public")) odbc::dbSendQuery(db, msg)
+
+odbc::dbWriteTable(
+  db, name = "cnes_data", value = df,
+  row.names = FALSE, append = TRUE
+)
+
+# read_any(db, "cnes_data")
+
+# drop_table(db, "cnes_data")
+
+# Disconecta --------------------------------------------------------------
+
+DBI::dbDisconnect(db)
