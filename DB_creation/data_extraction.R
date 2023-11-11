@@ -1,5 +1,6 @@
 
 source("DB_creation/packages.R", encoding = "UTF-8")
+source("DB_creation/functions.R", encoding = "UTF-8")
 
 # Explorando microdatasus -------------------------------------------------
 
@@ -32,55 +33,80 @@ dados2 <- fetch_datasus(
 glimpse(dados2)
 
 
+# dados arquivo -----------------------------------------------------------
 
 
-# Dados baixados ----------------------------------------------------------
+sp2015 <- read.dbc("../Dados/SIA_PA/PASP1501a.dbc")
 
 
-dados_raw <- read.dbc("../Dados/SIA_PA/PASP1501a.dbc")
 
-glimpse(dados_raw)
 
-dados_raw[,8]
+# Municipios interesse ----------------------------------------------------------
+
+con <- conecta_base()
+
+# vamos separar os municipios da Grande sao paulo
+
+municipios <- read.table("../Dados/GSPA.txt", header = TRUE, sep = ";")
+IBGE_cidades <- read_any(con, "ibge_cidades")
+
+#sum(municipios$municipios %in% IBGE_cidades$cidade)
+
+municipios$municipios[!municipios$municipios %in% IBGE_cidades$cidade]
+# tem 4 muinicipios que não estão com o nome certo
+
+# vamos tentar rastrear eles
+IBGE_cidades %>% 
+  filter(grepl("Biritiba|Embu|Santana|Lourenço", cidade))
+
+municipios <- municipios %>% 
+  mutate(
+    municipios = case_when(
+      grepl("Biritiba", municipios) ~ "Biritiba-Mirim",
+      grepl("Embu$", municipios) ~ "Embu das Artes",
+      grepl("Santana", municipios) ~ "Santana de Parnaíba",
+      grepl("Lourenço", municipios) ~ "São Lourenço da Serra",
+      TRUE ~ municipios
+    )
+  ) %>%
+  left_join(IBGE_cidades, by = c("municipios" = "cidade")) %>% 
+  rename(
+    id_mun = idmun,
+    cidade = municipios
+  )
+
+names(municipios)
+
+msg <- paste("CREATE TABLE mun_interesse (
+  idmunint SERIAL PRIMARY KEY,
+  id_mun INTEGER,
+  codibge CHAR(7),
+  cidade  VARCHAR(100));")
+
+odbc::dbSendQuery(con, msg)
+
+
+odbc::dbWriteTable(
+  con, name = "mun_interesse", value = municipios,
+  row.names = FALSE, append = TRUE
+)
+
+
+# Manipulando dados -------------------------------------------------------
+
+arquivos <- list.files("../Dados/SIA_PA/", full.names = TRUE)
+
+lapply(arquivos, append_sia)
+
+drop_table(con, "sia_pa")
 
 dados_raw %>% 
-  group_by(PA_PROC_ID) %>% 
-  summarise(
-    n = length(unique(PA_NIVCPL))
-  ) %>% filter(n>1)
-unique(dados_raw$PA_NIVCPL)
-unique(dados_raw$PA_MOTSAI)
-unique(dados_raw$PA_OBITO)
-unique(dados_raw$PA_RACACOR)
+  select(all_of(col_int)) %>%
+glimpse()
 
-# Colunas de interesse
-
-##
-# 1 - cod estabelecimento
-# 4 - cod munic estabelecimento
-# 8 - tipo de estabelecimento
-# 11 - CNPJ estabelecimento
-# 14 - Data do processamento
-# 15 - data da realização
-# 16 - Código do procedimento
-# 17 - Tipo de financiamento
-# 19 - Complexidade do procedimento
-# 24 - Motivo de saida
-# 25 - Indicador de obito (APAC)
-# 26 - Indicador de encerramento
-# 27 - Indicador de permanencia
-# 28 - Indicador de Alta
-# 29 - Indicador de transferencia
-# 30 - CID Principal
-# 31 - CID Secundario
-# 32 - CID causas associadas
-# 33 - Carater atendimento
-# 34 - Idade
-# 38 - Sexo
-# 39 - Raca/Cor
-# 40 - Municipio de residencia (ou estabelecimento caso BPA)
-# 41 - Quantidade Produzida
-# 42 - QUantidade aprovada
+dados_raw[,30]
 
 
+# Disconecta --------------------------------------------------------------
 
+DBI::dbDisconnect(db)

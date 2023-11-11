@@ -8,7 +8,7 @@ Thomas Nogueira Vilches
 
 - CNES:
   - Organizar os índices do que já foi adicionado
-  - COncatenar com os municipios IBGE
+  - Concatenar com os municipios IBGE  - ok
   - Criar tabela com webscraping do dicionario da Fiocruz - *Não necessário agora*
   - Pegar códigos de Regiões, micro regiões, etc - *Não necessário agora*
 - Cidades
@@ -20,8 +20,10 @@ Thomas Nogueira Vilches
     - Renda OK
     - Outros?
 - Dados SIA-PA
-  - Substituir os índices com as tabelas consolidadas
+  - Substituir os índices com as tabelas consolidadas ok
   - arrumar as datas OK
+  - Falta adicionar os dados
+  - Base está ficando grande
 - *GERAL*
   - Consolidar o diagrama com a modelagem da base relacional
   
