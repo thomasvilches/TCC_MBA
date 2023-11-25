@@ -86,35 +86,17 @@ append_sia <- function(x){
   
   ##
   # 1 - cod estabelecimento
-  # 4 - cod munic estabelecimento
-  # 8 - tipo de estabelecimento 
-  # 11 - CNPJ estabelecimento
   # 14 - Data do processamento
   # 15 - data da realização
   # 16 - Código do procedimento
-  # 17 - Tipo de financiamento
-  # 19 - Complexidade do procedimento
-  # 24 - Motivo de saida
-  # 25 - Indicador de obito (APAC)
-  # 26 - Indicador de encerramento
-  # 27 - Indicador de permanencia
-  # 28 - Indicador de Alta
-  # 29 - Indicador de transferencia
   # 30 - CID Principal
-  # 31 - CID Secundario
-  # 32 - CID causas associadas
-  # 33 - Carater atendimento
-  # 34 - Idade
-  # 38 - Sexo
-  # 39 - Raca/Cor
   # 40 - Municipio de residencia (ou estabelecimento caso BPA)
   # 41 - Quantidade Produzida
   # 42 - QUantidade aprovada
   
-  col_int <- c(1, 4, 8, 11, 14, 15, 16, 17, 19, 24, 25, 26, 27, 28, 29,
-               30, 31, 32, 33, 34, 38, 39,40, 41, 42)
+  col_int <- c(1, 14, 15, 16, 30, 40, 41, 42)
   
-  names(dados_raw)[4]
+  # names(dados_raw)[4]
   
   IBGE_cidades <- read_any(con, "ibge_cidades")
   
@@ -128,60 +110,71 @@ append_sia <- function(x){
     filter(PA_MUNPCN %in% municipios$codibge_mod) %>%
     rename(codcid = PA_CIDPRI) %>% 
     trocar_id(con, ., "codcid", "idcid", "cid") %>% # okay, tudo lá
-    rename(id_cid_prim = idcid, codcid = PA_CIDSEC) %>% 
-    trocar_id(con, ., "codcid", "idcid", "cid") %>% # okay, tudo lá
-    rename(id_cid_sec = idcid, codcid = PA_CIDCAS) %>%
-    trocar_id(con, ., "codcid", "idcid", "cid") %>%# okay, alguns tem na, mas é okay
-    rename(id_cid_cas = idcid) %>% 
+    rename(id_cid_prim = idcid) %>% 
+    # rename(codcid = PA_CIDSEC) %>% 
+    # trocar_id(con, ., "codcid", "idcid", "cid") %>% # okay, tudo lá
+    # rename(id_cid_sec = idcid, codcid = PA_CIDCAS) %>%
+    # trocar_id(con, ., "codcid", "idcid", "cid") %>%# okay, alguns tem na, mas é okay
+    # rename(id_cid_cas = idcid) %>% 
     left_join(IBGE_cidades, by = c("PA_MUNPCN" = "codibge_mod")) %>% 
     rename(id_mun_pct = idmun) %>% 
-    left_join(IBGE_cidades, by = c("PA_UFMUN" = "codibge_mod")) %>% 
-    rename(id_mun_est = idmun) %>% 
+    # left_join(IBGE_cidades, by = c("PA_UFMUN" = "codibge_mod")) %>% 
+    # rename(id_mun_est = idmun) %>% 
     rename(codproc = PA_PROC_ID) %>%
     trocar_id(con, ., "codproc", "idproc", "procedimentos") %>% 
     rename(id_proc = idproc) %>%
-    rename(codmotsai = PA_MOTSAI) %>%
-    trocar_id(con, ., "codmotsai", "idmotsai", "motsai") %>% 
-    rename(id_motsai = idmotsai) %>% 
-    rename(codcompl = PA_NIVCPL) %>%
-    mutate(codcompl = as.integer(codcompl)) %>% 
-    trocar_id(con, ., "codcompl", "idcompl", "complex") %>% 
-    rename(id_compl = idcompl) %>% 
-    rename(codraca = PA_RACACOR) %>%
-    trocar_id(con, ., "codraca", "idraca", "raca") %>% 
-    rename(id_raca = idraca) %>% 
+    # rename(codmotsai = PA_MOTSAI) %>%
+    # trocar_id(con, ., "codmotsai", "idmotsai", "motsai") %>% 
+    # rename(id_motsai = idmotsai) %>% 
+    # rename(codcompl = PA_NIVCPL) %>%
+    # mutate(codcompl = as.integer(codcompl)) %>% 
+    # trocar_id(con, ., "codcompl", "idcompl", "complex") %>% 
+    # rename(id_compl = idcompl) %>% 
+    # rename(codraca = PA_RACACOR) %>%
+    # trocar_id(con, ., "codraca", "idraca", "raca") %>% 
+    # rename(id_raca = idraca) %>% 
     mutate(
       dt_proces = ymd(paste0(PA_MVM,"15")),
       dt_realiz = ymd(paste0(PA_CMP,"15"))
     ) %>% 
-    select(-PA_MVM, -PA_CMP, - PA_MUNPCN, -PA_UFMUN, -PA_TPUPS,
-           -PA_CNPJCPF) %>% 
+    # select(-PA_MVM, -PA_CMP, -PA_MUNPCN, -PA_UFMUN, -PA_TPUPS,
+    #        -PA_CNPJCPF) %>% 
+    select(-PA_MVM, -PA_CMP, -PA_MUNPCN) %>% 
     rename(
       cnes = PA_CODUNI,
-      tpfin = PA_TPFIN,
-      categoria = PA_CATEND,
-      sexo = PA_SEXO,
-      idade = PA_IDADE,
-      obito = PA_OBITO,
-      encer = PA_ENCERR,
-      perman = PA_PERMAN,
-      transf = PA_TRANSF,
-      alta = PA_ALTA,
+      # tpfin = PA_TPFIN,
+      # categoria = PA_CATEND,
+      # sexo = PA_SEXO,
+      # idade = PA_IDADE,
+      # obito = PA_OBITO,
+      # encer = PA_ENCERR,
+      # perman = PA_PERMAN,
+      # transf = PA_TRANSF,
+      # alta = PA_ALTA
     ) %>% 
     mutate(
       cnes = as.character(cnes),
-      tpfin = as.character(tpfin),
-      sexo = as.character(sexo),
-      categoria = as.character(categoria),
-      obito = as.character(obito),
-      encer = as.character(encer),
-      perman = as.character(perman),
-      transf = as.character(transf),
-      alta = as.character(alta),
-      idade = as.integer(idade)
+      # tpfin = as.character(tpfin),
+      # sexo = as.character(sexo),
+      # categoria = as.character(categoria),
+      # obito = as.character(obito),
+      # encer = as.character(encer),
+      # perman = as.character(perman),
+      # transf = as.character(transf),
+      # alta = as.character(alta),
+      # idade = as.integer(idade)
     )
   
+  dados <- dados %>% 
+    trocar_id(con, ., "cnes", "idcnes", "estabelecimento")
   
+  
+  dados <- dados %>% 
+    group_by(idcnes, id_mun_pct, dt_realiz, dt_proces, id_cid_prim) %>% 
+    summarise(
+      pa_qtdpro = sum(PA_QTDPRO, na.rm = TRUE),
+      pa_qtdaprov = sum(PA_QTDAPR, na.rm = TRUE)
+    )
   
   tipos <- dbDataType(db, dados)
   
@@ -194,7 +187,7 @@ append_sia <- function(x){
   
   if(!"sia_pa" %in% dbListTables(con, schema = "public")) odbc::dbSendQuery(con, msg)
   
-  read_any(con, "sia_pa")
+  # read_any(con, "sia_pa")
   
   names(dados) <- tolower(names(dados))
   odbc::dbWriteTable(

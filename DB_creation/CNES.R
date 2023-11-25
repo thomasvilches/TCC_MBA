@@ -291,6 +291,43 @@ odbc::dbWriteTable(
 
 # drop_table(db, "cnes_data")
 
+
+# ajeitando ---------------------------------------------------------------
+
+
+odbc::dbSendQuery(con, "CREATE TABLE estabelecimento (
+  idcnes SERIAL PRIMARY KEY,
+  cnes CHAR(7),
+  id_mun  INTEGER
+);")
+
+read_any(con, "cnes_data") %>%
+  group_by(cnes) %>% 
+  summarise(
+    id_mun = unique(id_mun)
+  ) %>% 
+odbc::dbWriteTable(
+  con, name = "estabelecimento", value = .,
+  row.names = FALSE, append = TRUE
+)
+
+# drop_table(con, "estabelecimento")
+
+# ALTER TABLE cnes_data
+# DROP COLUMN id_mun;
+
+# ALTER TABLE cnes_data
+# ADD COLUMN id_cnes INTEGER;
+# 
+# -- Atualiza a nova coluna com os dados da tabela de origem usando um JOIN
+# UPDATE cnes_data
+# SET id_cnes = estabelecimento.idcnes
+# FROM estabelecimento
+# WHERE cnes_data.cnes = estabelecimento.cnes;
+
+
+# ALTER TABLE cnes_data
+# DROP COLUMN id_mun;
 # Disconecta --------------------------------------------------------------
 
 DBI::dbDisconnect(db)

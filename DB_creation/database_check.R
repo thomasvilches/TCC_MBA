@@ -30,3 +30,27 @@ odbc::dbGetQuery(
   db, paste0("SELECT * FROM public.", "ibge_cidades",";")
 )
  
+
+
+
+dados_raw %>% 
+  group_by(PA_PROC_ID) %>% 
+  summarise(
+    n = length(unique(PA_NIVCPL))
+  ) %>% filter(n > 1)
+
+
+dados_raw %>% pull(PA_PROC_ID) %>% unique %>% length
+
+odbc::dbListTables(con)
+read_any(con, "procedimentos") %>% head
+
+read_any(con, "cnes_data") %>% 
+  group_by(cnes) %>% 
+  summarise(
+    n = length(unique(cpf_cnpj)),
+    ll = paste(unique(cpf_cnpj), collapse = "; ")
+  ) %>% filter(n > 1)
+
+
+

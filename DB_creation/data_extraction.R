@@ -94,19 +94,16 @@ odbc::dbWriteTable(
 
 # Manipulando dados -------------------------------------------------------
 
+con <- conecta_base()
 arquivos <- list.files("../Dados/SIA_PA/", full.names = TRUE)
 
 lapply(arquivos, append_sia)
 
-drop_table(con, "sia_pa")
+# drop_table(con, "sia_pa")
 
-dados_raw %>% 
-  select(all_of(col_int)) %>%
-glimpse()
-
-dados_raw[,30]
 
 
 # Disconecta --------------------------------------------------------------
 
-DBI::dbDisconnect(db)
+DBI::dbDisconnect(con)
+# DBI::dbDisconnect(db)
