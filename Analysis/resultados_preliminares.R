@@ -204,7 +204,7 @@ l <- list(
 df_f %>% 
   left_join(mun_int) %>% 
 plot_ly(
-  x = ~PC1, y = ~PC2, color = ~cluster, type = "scatter",
+  x = ~PC1, y = ~PC2, color = ~cluster, type = "scatter", mode = "markers",
   alpha = 0.7, size = 2,
   text = ~cidade,
   hoverinfo = 'text'
