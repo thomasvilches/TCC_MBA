@@ -1,7 +1,7 @@
 
 
-source("DB_creation/functions.R", encoding = "UTF-8")
-source("DB_creation/packages.R", encoding = "UTF-8")
+source("functions.R", encoding = "UTF-8")
+source("packages.R", encoding = "UTF-8")
 
 
 # data --------------------------------------------------------------------
@@ -307,3 +307,119 @@ odbc::dbWriteTable(
   db, name = "ibge_renda", value = dados,
   row.names = FALSE, append = TRUE
 )
+
+
+# Arrumando ref idade ---------------------------------------------------------
+
+
+db <- conecta_base()
+
+
+idade <- read_any(db, "ibge_idade") %>% head
+
+
+nomes <- idade %>% select(starts_with("ag")) %>% names
+
+idades <- nomes %>% gsub("ag", "", .) %>%
+  gsub("to", " a ", .) %>% gsub("(\\d+)$", "\\1 anos", .) %>% gsub("plus", " anos ou mais", .)
+ages <- nomes %>% gsub("ag", "", .) %>%
+  gsub("to", " to ", .) %>% gsub("(\\d+)$", "\\1 years", .) %>% gsub("plus", "+ years", .)
+
+df <- data.frame(groups = nomes, idade_pt = idades, idade_en = idades)
+
+
+msg <- paste("CREATE TABLE ref_idades (
+  ididades SERIAL PRIMARY KEY,",
+             paste(names(df), " VARCHAR", collapse = ","),
+             ");")
+
+
+odbc::dbSendQuery(db, msg)
+
+odbc::dbWriteTable(
+  db, name = "ref_idades", value = df,
+  row.names = FALSE, append = TRUE
+)
+
+# Arrumando ref raca ---------------------------------------------------------
+
+
+db <- conecta_base()
+
+
+raca <- read_any(db, "ibge_raca") %>% head
+
+
+nomes <- raca %>% select(!starts_with("id")) %>% names
+
+raca <- c("Total", "Branca", "Preta", "Amarela", "Parda", "Indígena", "Sem declaração")
+race <- c("Total", "White", "Black", "East Asian", "Brown", "Indigenous", "No declaration")
+  
+df <- data.frame(groups = nomes, raca_pt = raca, raca_en = race)
+
+
+msg <- paste("CREATE TABLE ref_raca (
+  idraca SERIAL PRIMARY KEY,",
+             paste(names(df), " VARCHAR", collapse = ","),
+             ");")
+
+
+odbc::dbSendQuery(db, msg)
+
+odbc::dbWriteTable(
+  db, name = "ref_raca", value = df,
+  row.names = FALSE, append = TRUE
+)
+
+
+
+
+# Arrumando ref renda -----------------------------------------------------
+
+
+
+renda <- read_any(db, "ibge_renda") %>% head
+
+
+
+nomes <- renda %>% select(!starts_with("id")) %>% names
+
+df <- data.frame(groups = nomes) %>% 
+  mutate(
+    renda_pt = case_when(
+      groups == "total" ~ "Total",
+      groups == "ate_meio" ~ "Até meio salário mínimo",
+      groups == "de_meioa1" ~ "De meio a um salário mínimo",
+      groups == "s_20plus" ~ "Mais de 20 salários mínimos",
+      groups == "sem_rendimento" ~ "Sem rendimento",
+      TRUE ~ gsub("de_(\\d+)a(\\d+)", "De \\1 a \\2 salários mínimos", groups)
+      
+    ),
+    renda_en = case_when(
+      groups == "total" ~ "Total",
+      groups == "ate_meio" ~ "Less than half minimum wage",
+      groups == "de_meioa1" ~ "Half to one minimum wage",
+      groups == "s_20plus" ~ "More than 20 minimum wages",
+      groups == "sem_rendimento" ~ "No income",
+      TRUE ~ gsub("de_(\\d+)a(\\d+)", "From \\1 to \\2 minimum wages", groups)
+      
+    )
+  )
+
+
+msg <- paste("CREATE TABLE ref_renda (
+  idrendaref SERIAL PRIMARY KEY,",
+             paste(names(df), " VARCHAR", collapse = ","),
+             ");")
+
+
+odbc::dbSendQuery(db, msg)
+
+odbc::dbWriteTable(
+  db, name = "ref_renda", value = df,
+  row.names = FALSE, append = TRUE
+)
+
+
+
+

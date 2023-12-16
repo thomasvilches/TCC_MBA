@@ -195,3 +195,167 @@ append_sia <- function(x){
     row.names = FALSE, append = TRUE
   )
 }
+
+entra_cnes <- function(Ano, files){
+  
+  message(paste("iniciando ano", Ano))
+  cnes <- lapply(files[(12*(Ano-1)+1):(12*Ano)], read.dbc::read.dbc)
+  
+  cnes <- Reduce(bind_rows, cnes)
+  
+  # Limpando os dados -------------------------------------------------------
+  
+  cnes <- cnes %>% rename(cnes = CNES)
+  
+  colunas <- c(
+    "cnes",
+    "CODUFMUN",
+    "VINC_SUS",
+    "ATIVIDAD",
+    "TP_UNID",
+    "NIVATE_A",
+    "NIVATE_H",
+    "LEITHOSP",
+    "URGEMERG",
+    "ATENDAMB",
+    "CENTRCIR",
+    "CENTROBS",
+    "CENTRNEO",
+    "ATENDHOS",
+    "COMPETEN"
+  )
+  
+  # QTLEIT
+  # QTINST
+  
+  df <- cnes %>% 
+    select(all_of(colunas), starts_with("QTLEIT"), starts_with("QTINST"))
+  
+  # glimpse(df)
+  # 
+  # df %>% group_by(cnes) %>% summarise(n = n()) %>% filter(n>1) %>% nrow
+  # df %>% group_by(cnes) %>% summarise(n = n()) %>% filter(n>1) %>% arrange(desc(cnes))
+  # df %>% pull(cnes) %>% unique %>% length
+  # 
+  # df %>% filter(CNES == "8016577") %>% View
+  # 
+  # df %>%  group_by(cnes) %>% 
+  #   summarise(
+  #     n = length(unique(VINC_SUS))
+  #   ) %>% filter(n>1)
+  # 
+  # df %>% group_by(cnes) %>% 
+  #   summarise(
+  #     n = n()
+  #   ) %>% filter(n > 1) %>% arrange(n)
+  # Ajeitando Datas ---------------------------------------------------------
+  # 
+  # df$DT_ACRED %>% unique
+  # df$DT_PUBLE %>% unique
+  # df$DT_ATUAL %>% unique
+  # df$DT_EXPED %>% unique
+  # df$COMPETEN %>% unique
+  
+  message("Arrumando datas")
+  df <- df %>% 
+    rowwise() %>% 
+    mutate(
+      COMPETEN = change_date(COMPETEN)
+    ) %>% ungroup()
+  
+  # View(df)
+  
+  
+  
+  # Substituindo os indices -------------------------------------------------
+  message("trocando ids")
+  # dbListTables(db, schema = "public")
+  
+  # ir <- read_any(db, "cnes_ir")
+  # 
+  # names(df)
+  # df <- df %>%
+  #   left_join(ir, by = c("COD_IR" = "codir")) %>% 
+  #   select(-COD_IR, -descir) %>% 
+  #   rename(id_ir = idir)
+  # 
+  # pfpj <- read_any(db, "cnes_pfpj")
+  # 
+  # df <- df %>%
+  #   left_join(pfpj, by = c("PF_PJ" = "codpjpf")) %>% 
+  #   select(-PF_PJ, -descpjpf) %>% 
+  #   rename(id_pjpf = idpjpf)
+  # 
+  atv <- read_any(db, "cnes_ativid")
+  
+  df <- df %>%
+    left_join(atv, by = c("ATIVIDAD" = "codatv")) %>% 
+    select(-ATIVIDAD, -descatv) %>% 
+    rename(id_atv = idatv)
+  
+  est <- read_any(db, "cnes_tpest")
+  
+  df <- df %>%
+    left_join(est, by = c("TP_UNID" = "codtpest")) %>% 
+    select(-TP_UNID, -desctpest) %>% 
+    rename(id_tpest = idtpest)
+  
+  
+  mun <- read_any(db, "ibge_cidades")
+  
+  df <- mun %>% 
+    mutate(
+      code6 = str_remove(codibge, ".$")
+    ) %>% 
+    right_join(df, by = c("code6" = "CODUFMUN")) %>% 
+    select(-codibge, -cidade,-code6) %>% 
+    rename(
+      id_mun = idmun
+    )
+  
+  
+  df <- df %>% 
+    relocate(
+      cnes,
+      starts_with("id_"),
+      starts_with("DT_"),
+      COMPETEN
+    )
+  
+  glimpse(df)
+  
+  names(df) <- tolower(names(df))
+  
+  tipos <- dbDataType(db, df)
+  
+  msg <- paste("CREATE TABLE cnes_data (
+  idcnesdata SERIAL PRIMARY KEY,",
+               paste(names(df)," ", tipos[names(df)], collapse = ",\n"),
+               ");")
+  
+  
+  # cat(msg)
+  if(!"cnes_data" %in% dbListTables(db, schema = "public")) odbc::dbSendQuery(db, msg)
+  
+  odbc::dbWriteTable(
+    db, name = "cnes_data", value = df,
+    row.names = FALSE, append = TRUE
+  )
+}
+
+
+
+tema <- theme_bw()+
+  theme(
+    axis.title = element_text(size = 14, face = "bold"),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 14, face = "bold"),
+    legend.text = element_text(size = 12),
+  )
+
+virgula <- scales::comma_format(big.mark = ".",
+                                decimal.mark = ",")
+
+
+paleta <- rcartocolor::carto_pal(12, "Bold")[c(1, 2, 3, 7, 12, 8, 9)]
+

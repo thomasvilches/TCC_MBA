@@ -1,6 +1,6 @@
 
-source("DB_creation/packages.R", encoding = "UTF-8")
-source("DB_creation/functions.R", encoding = "UTF-8")
+source("packages.R", encoding = "UTF-8")
+source("functions.R", encoding = "UTF-8")
 
 # ?dbWriteTable
 

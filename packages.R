@@ -15,5 +15,7 @@ library("RPostgreSQL")
 library(odbc)
 
 library(PNADcIBGE)
-
-source("DB_creation/functions.R", encoding = "UTF-8")
+library(corrplot)
+library(factoextra)
+library(psych)
+library(plotly)

@@ -1,7 +1,7 @@
 
 
-source("DB_creation/functions.R", encoding = "UTF-8")
-source("DB_creation/packages.R", encoding = "UTF-8")
+source("functions.R", encoding = "UTF-8")
+source("packages.R", encoding = "UTF-8")
 
 
 db <- conecta_base()
@@ -115,177 +115,19 @@ glimpse(cnes)
 
 # Baixei os dados e vou fazer a extração de todos
 
-files <- list.files("../Dados/CNES_2015_2020/", full.names = TRUE)
-
-Ano = 1
-cnes <- lapply(files[(12*(Ano-1)+1):(12*Ano)], read.dbc::read.dbc)
-
-cnes <- Reduce(bind_rows, cnes)
-nrow(cnes)
+files <- list.files("../Dados/CNES_2015_2020/", full.names = TRUE, pattern = ".\\.dbc")
 
 
-# Limpando os dados -------------------------------------------------------
+entra_cnes(1, files)
+entra_cnes(2, files)
+entra_cnes(3, files)
+entra_cnes(4, files)
+entra_cnes(5, files)
+entra_cnes(6, files)
 
+Ano = 6
+files[(12*(Ano-1)+1):(12*Ano)]
 
-
-colunas <- c(
-  "CNES",
-  "CODUFMUN",
-  "COD_CEP", 
-  "CPF_CNPJ",
-  "PF_PJ",
-  "COD_IR",
-  "REGSAUDE",
-  "MICR_REG",
-  "DISTRSAN",
-  "VINC_SUS",
-  "ATIVIDAD",
-  "TP_UNID",
-  "DT_PUBLM",
-  "DT_PUBLE",
-  "DT_EXPED",
-  "ALVARA",
-  "AV_ACRED",
-  "DT_ACRED",
-  "AV_PNASS",
-  "DT_PNASS",
-  "NIVATE_A",
-  "NIVATE_H",
-  "LEITHOSP",
-  "URGEMERG",
-  "ATENDAMB",
-  "CENTRCIR",
-  "CENTROBS",
-  "CENTRNEO",
-  "ATENDHOS",
-  "ATEND_PR",
-  "DT_ATUAL",
-  "COMPETEN"
-)
-
-# QTLEIT
-# QTINST
-
-df <- cnes %>% 
-  select(all_of(colunas), starts_with("QTLEIT"), starts_with("QTINST"))
-
-glimpse(df)
-
-df %>% group_by(cnes) %>% summarise(n = n()) %>% filter(n>1) %>% nrow
-df %>% group_by(cnes) %>% summarise(n = n()) %>% filter(n>1) %>% arrange(desc(cnes))
-df %>% pull(cnes) %>% unique %>% length
-
-df %>% filter(cnes == "8016577") %>% View
-
-
-df %>% group_by(cnes) %>% 
-  summarise(
-    n = n()
-  ) %>% filter(n > 1) %>% arrange(n)
-# Ajeitando Datas ---------------------------------------------------------
-# 
-# df$DT_ACRED %>% unique
-# df$DT_PUBLE %>% unique
-# df$DT_ATUAL %>% unique
-# df$DT_EXPED %>% unique
-# df$COMPETEN %>% unique
-
-
-df <- df %>% 
-  rowwise() %>% 
-  mutate_at(vars(contains('DT_')),
-            change_date
-  ) %>% ungroup()
-
-df <- df %>% 
-  rowwise() %>% 
-  mutate(
-    COMPETEN = change_date(COMPETEN)
-  ) %>% ungroup()
-
-# View(df)
-
-
-
-# Substituindo os indices -------------------------------------------------
-
-dbListTables(db, schema = "public")
-
-ir <- read_any(db, "cnes_ir")
-
-names(df)
-df <- df %>%
-  left_join(ir, by = c("COD_IR" = "codir")) %>% 
-  select(-COD_IR, -descir) %>% 
-  rename(id_ir = idir)
-
-pfpj <- read_any(db, "cnes_pfpj")
-
-df <- df %>%
-  left_join(pfpj, by = c("PF_PJ" = "codpjpf")) %>% 
-  select(-PF_PJ, -descpjpf) %>% 
-  rename(id_pjpf = idpjpf)
-
-atv <- read_any(db, "cnes_ativid")
-
-df <- df %>%
-  left_join(atv, by = c("ATIVIDAD" = "codatv")) %>% 
-  select(-ATIVIDAD, -descatv) %>% 
-  rename(id_atv = idatv)
-
-est <- read_any(db, "cnes_tpest")
-
-df <- df %>%
-  left_join(est, by = c("TP_UNID" = "codtpest")) %>% 
-  select(-TP_UNID, -desctpest) %>% 
-  rename(id_tpest = idtpest)
-
-# Municipio
-df %>% pull(CODUFMUN) %>% unique
-
-
-
-mun <- read_any(db, "ibge_cidades")
-
-df <- mun %>% 
-  mutate(
-    code6 = str_remove(codibge, ".$")
-  ) %>% 
-  right_join(df, by = c("code6" = "CODUFMUN")) %>% 
-  select(-codibge, -cidade,-code6) %>% 
-  rename(
-    id_mun = idmun
-  )
-
-head(df)
-
-df <- df %>% 
-  relocate(
-    CNES,
-    starts_with("id_"),
-    starts_with("DT_"),
-    COMPETEN
-  )
-
-glimpse(df)
-
-names(df) <- tolower(names(df))
-
-tipos <- dbDataType(db, df)
-
-msg <- paste("CREATE TABLE cnes_data (
-  idcnesdata SERIAL PRIMARY KEY,",
-             paste(names(df)," ", tipos[names(df)], collapse = ",\n"),
-             ");")
-
-
-cat(msg)
-if(!"cnes_data" %in% dbListTables(db, schema = "public")) odbc::dbSendQuery(db, msg)
-
-odbc::dbWriteTable(
-  db, name = "cnes_data", value = df,
-  row.names = FALSE, append = TRUE
-)
 
 # read_any(db, "cnes_data")
 
@@ -295,39 +137,41 @@ odbc::dbWriteTable(
 # ajeitando ---------------------------------------------------------------
 
 
-odbc::dbSendQuery(con, "CREATE TABLE estabelecimento (
+odbc::dbSendQuery(db, "CREATE TABLE estabelecimento (
   idcnes SERIAL PRIMARY KEY,
   cnes CHAR(7),
   id_mun  INTEGER
 );")
 
-read_any(con, "cnes_data") %>%
+read_any(db, "cnes_data") %>%
   group_by(cnes) %>% 
   summarise(
     id_mun = unique(id_mun)
   ) %>% 
 odbc::dbWriteTable(
-  con, name = "estabelecimento", value = .,
+  db, name = "estabelecimento", value = .,
   row.names = FALSE, append = TRUE
 )
 
-# drop_table(con, "estabelecimento")
-
-# ALTER TABLE cnes_data
-# DROP COLUMN id_mun;
-
-# ALTER TABLE cnes_data
-# ADD COLUMN id_cnes INTEGER;
+# drop_table(db, "estabelecimento")
 # 
-# -- Atualiza a nova coluna com os dados da tabela de origem usando um JOIN
-# UPDATE cnes_data
-# SET id_cnes = estabelecimento.idcnes
-# FROM estabelecimento
-# WHERE cnes_data.cnes = estabelecimento.cnes;
-
-
 # ALTER TABLE cnes_data
 # DROP COLUMN id_mun;
+# 
+#  ALTER TABLE cnes_data
+#  ADD COLUMN id_cnes INTEGER;
+# 
+#  -- Atualiza a nova coluna com os dados da tabela de origem usando um JOIN
+#  UPDATE cnes_data
+#  SET id_cnes = estabelecimento.idcnes
+#  FROM estabelecimento
+#  WHERE cnes_data.cnes = estabelecimento.cnes;
+# 
+#  ALTER TABLE cnes_data
+#  DROP COLUMN id_mun;
+# 
+#  ALTER TABLE cnes_data
+#  DROP COLUMN cnes;
 # Disconecta --------------------------------------------------------------
 
 DBI::dbDisconnect(db)
