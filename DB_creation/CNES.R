@@ -1,7 +1,7 @@
 
 
-source("functions.R", encoding = "UTF-8")
 source("packages.R", encoding = "UTF-8")
+source("functions.R", encoding = "UTF-8")
 
 
 db <- conecta_base()

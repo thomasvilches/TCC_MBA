@@ -1,8 +1,8 @@
 
 # pacotes e funcoes -------------------------------------------------------
 
-source("functions.R", encoding = "UTF-8")
 source("packages.R", encoding = "UTF-8")
+source("functions.R", encoding = "UTF-8")
 
 
 
@@ -218,5 +218,115 @@ layout( xaxis =  list(title = list(text = '<b>PC1</b>', font = list(size = 20)))
 
 
 # CNES --------------------------------------------------------------------
+
+odbc::dbListTables(db)
+
+cities <- read_any(db, "ibge_cidades")
+estabelecimento <- read_any(db, "estabelecimento")
+cnes <- read_any(db, "cnes_data_year")
+
+pop <- odbc::dbGetQuery(db, "select id_mun, total from ibge_idade")
+
+
+
+nrow(cnes)
+
+names(cities)
+names(estabelecimento)
+names(cnes)
+
+df <- cnes %>% 
+  left_join(estabelecimento, by = c("id_cnes" = "idcnes")) %>% 
+  left_join(cities, by = c("id_mun" = "idmun"))
+
+df %>%
+  group_by(id_mun, cidade, ano) %>% 
+  summarise(
+    n = length(unique(id_cnes))
+  ) %>% 
+  left_join(pop, by = "id_mun") %>% 
+  ungroup() %>% 
+  mutate(
+    prop = n*100000/total,
+    ano = factor(ano)
+  ) %>% 
+  ggplot()+
+  geom_histogram(aes(x = prop, fill = ano), color = 'black')+
+  labs(x = "Número de estabelecimentos por 100 mil habitantes", y = "Contagem")+
+  facet_wrap(.~ano)+
+  scale_fill_manual(values = scales::alpha(c(paleta), 1))+
+  tema+
+  theme(
+    legend.position = "none"
+  )
+
+
+## GIS ---------------------------------------------------------------------
+
+sp <- sf::read_sf("../Dados/GIS/cidades_SP.shp")
+
+plot(sp$geometry)
+
+br <- sf::read_sf("../Dados/GIS/BRMUE250GC_SIR.shp")
+br
+
+sp <- br %>% 
+  filter(grepl('^35', CD_GEOCMU))
+
+plot(sp$geometry)
+
+names(df)
+
+df %>%
+  group_by(id_mun, cidade, codibge, ano) %>% 
+  summarise(
+    n = length(unique(id_cnes))
+  ) %>% 
+  left_join(pop, by = "id_mun") %>% 
+  ungroup() %>% 
+  left_join(sp, by = c("codibge" = "CD_GEOCMU")) %>% 
+  mutate(
+    prop = n*100000/total,
+    ano = factor(ano)
+  ) %>% 
+  ggplot()+
+  geom_sf(aes(geometry = geometry, fill = prop))+
+  facet_wrap(.~ano)+
+  scale_fill_viridis_c()+
+  labs(fill = "Número de estabelecimentos por 100 mil habitantes")+
+  # scale_fill_manual(values = scales::alpha(c(paleta), 1))+
+  tema+
+  guides(fill = guide_colourbar(title.position = "top",
+                                title.hjust = 0.5, barwidth = 10, barheight = 1))+
+  theme(
+    legend.position = "bottom",
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    legend.direction = "horizontal"
+  )
+
+
+
+ggsave("plots/map_cnes.png", device = "png", dpi = 300, width = 9, height = 6)
+
+
+
+
+df %>%
+  group_by(id_mun, cidade, codibge, ano) %>% 
+  summarise(
+    n = length(unique(id_cnes))
+  ) %>% 
+  left_join(pop, by = "id_mun") %>% 
+  ungroup() %>% 
+  left_join(sp, by = c("codibge" = "CD_GEOCMU")) %>% 
+  mutate(
+    prop = n*100000/total,
+    ano = factor(ano)
+  ) %>% 
+  arrange(desc(prop))
+
+
+## Correlacao --------------------------------------------------------------
 
 
