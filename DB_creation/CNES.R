@@ -172,6 +172,43 @@ odbc::dbWriteTable(
 # 
 #  ALTER TABLE cnes_data
 #  DROP COLUMN cnes;
+
+
+# Tabela por ano ----------------------------------------------------------
+
+cnes <- read_any(db, "cnes_data")
+
+nrow(cnes)
+names(cnes)
+
+df <- cnes %>% 
+  mutate(
+    Ano = year(competen)
+  ) %>% 
+  group_by(id_cnes, Ano, id_atv, id_tpest, vinc_sus, nivate_a, nivate_h,
+           leithosp, urgemerg, atendamb, centrcir, centrobs, centrneo, atendhos) %>% 
+  summarise_at(vars(starts_with("qt")), list(~ mean(., na.rm = TRUE)))
+
+
+tipos <- dbDataType(db, df)
+
+names(df) <- tolower(names(df))
+
+msg <- paste("CREATE TABLE cnes_data_year (
+  idcnesdatayear SERIAL PRIMARY KEY,",
+             paste(names(df)," ", tipos[names(df)], collapse = ",\n"),
+             ");")
+
+
+# cat(msg)
+odbc::dbSendQuery(db, msg)
+
+odbc::dbWriteTable(
+  db, name = "cnes_data_year", value = df,
+  row.names = FALSE, append = TRUE
+)
+
+
 # Disconecta --------------------------------------------------------------
 
 DBI::dbDisconnect(db)

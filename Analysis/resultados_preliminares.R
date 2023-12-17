@@ -329,4 +329,47 @@ df %>%
 
 ## Correlacao --------------------------------------------------------------
 
+glimpse(df)
+df %>% 
+  select(starts_with("qt")) %>% 
+  as.matrix() %>% 
+  cor %>% corrplot(method = "pie", type = "lower")
 
+
+pca <- df %>% 
+  select(starts_with("qt")) %>% 
+  as.matrix() %>% 
+  psych::principal(
+    r = .,
+    nfactors = ncol(.),
+    scores = TRUE,
+    rotate = "none"
+  )
+
+
+pca$Vaccounted
+pca$values
+
+# 4 variáveis
+df_f <- as.data.frame(pca$scores[, 1:14])
+df_f$id_cnes <- cnes$id_cnes
+df_f$cluster <- as.factor(k4$cluster)
+
+
+
+file_path= "plots/correlation_pca_cnes.png"
+png(height=4, width=13, units = "in", file=file_path, type = "cairo", res = 300)
+
+# Your function to plot image goes here
+
+df  %>% 
+  select(starts_with("qt"))  %>% 
+  as.matrix() %>% 
+  cor(pca$scores[, 1:14]) %>%
+  t() %>% 
+  corrplot("pie", tl.col = "black")
+
+
+
+# Then
+dev.off()
