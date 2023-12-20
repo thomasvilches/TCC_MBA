@@ -327,17 +327,87 @@ df %>%
   arrange(desc(prop))
 
 
+# Agrupar variaveis -------------------------------------------------------
+
+
+names(cnes) <- gsub("qtleitp", "qtleit0", names(cnes))
+
+nomes <- c("Consultório Urg/Emerg", "Repouso Urg/Emerg",
+           "Outros Urg/Emerg", "Consultórios médicos Urg/Emerg",
+           "Clínica Ambulatorial", "Consultório não médico (Ambulat)",
+           "Repouso (Ambulat)", "Outros (Ambulat)", "Centro cirúrgico",
+           "Centro obstétrico", "Neonatal")
+
+idx <- list(
+  c("01", "02", "03", "04"), c("05", "06", "07", "08"),
+  c("09", "10", "11", "12", "13"), c("14"), c("15", "16", "17"),
+  c("18"), c("19", "20", "21", "22"), as.character(seq(23,30)),
+  c("31", "32", "33"),  c("34", "35", "36", "37"),  c("38", "39", "40")
+)
+
+vars_list_inst <- lapply(idx, function(x) paste0("qtinst",x))
+vars_list_leito <- lapply(idx, function(x) paste0("qtleit",x))
+
+somar <- function(lista, df){
+  lista1 <- lista[lista %in% names(df)]
+  rowSums(df[lista1])
+}
+
+Newvars <- lapply(vars_list_inst, somar, df = cnes) %>% 
+  Reduce(cbind, .) %>% as.data.frame()
+
+
+Newvars2 <- lapply(vars_list_leito, somar, df = cnes) %>% 
+  Reduce(cbind, .)%>% as.data.frame()
+
+names(Newvars) <- paste("Instalação -", nomes)
+names(Newvars2) <- paste("Leitos -", nomes)
+
+
+cnes <- cnes %>% select(seq(1,15)) %>%
+  bind_cols(Newvars) %>% 
+  bind_cols(Newvars2)
+
+
+check_n <- function(df){
+  nn <- names(df)
+  teste <- rep(FALSE, length(nn))
+  for(i in 1:length(nn)){
+    x <- df[[nn[i]]]
+    if(!is.numeric(x)){
+      teste[i] <- TRUE
+    }else{
+      if(sum(x) > 0)
+        teste[i] <- TRUE
+    }
+  }
+  return(teste)
+  
+}
+
+sn <- check_n(cnes)
+names(sn) <- names(cnes)
+sn
+cnes <- cnes[, sn]
+
 ## Correlacao --------------------------------------------------------------
 
-glimpse(df)
-df %>% 
-  select(starts_with("qt")) %>% 
-  as.matrix() %>% 
-  cor %>% corrplot(method = "pie", type = "lower")
+df <- cnes
 
+glimpse(df)
+
+file_path= "plots/correlation_cnes.png"
+png(height=8, width=8, units = "in", file=file_path, type = "cairo", res = 300)
+
+df %>% 
+  select(starts_with("Insta"), starts_with("Leitos")) %>% 
+  as.matrix() %>% 
+  cor %>% corrplot(method = "pie", type = "lower", tl.col = "black")
+
+dev.off()
 
 pca <- df %>% 
-  select(starts_with("qt")) %>% 
+  select(starts_with("Insta"), starts_with("Leitos")) %>% 
   as.matrix() %>% 
   psych::principal(
     r = .,
@@ -351,21 +421,20 @@ pca$Vaccounted
 pca$values
 
 # 4 variáveis
-df_f <- as.data.frame(pca$scores[, 1:14])
+df_f <- as.data.frame(pca$scores[, 1:6])
 df_f$id_cnes <- cnes$id_cnes
-df_f$cluster <- as.factor(k4$cluster)
 
 
 
 file_path= "plots/correlation_pca_cnes.png"
-png(height=4, width=13, units = "in", file=file_path, type = "cairo", res = 300)
+png(height=6, width=11, units = "in", file=file_path, type = "cairo", res = 300)
 
 # Your function to plot image goes here
 
 df  %>% 
-  select(starts_with("qt"))  %>% 
+  select(starts_with("Insta"), starts_with("Leitos"))  %>% 
   as.matrix() %>% 
-  cor(pca$scores[, 1:14]) %>%
+  cor(pca$scores[, 1:14], .) %>%
   t() %>% 
   corrplot("pie", tl.col = "black")
 
