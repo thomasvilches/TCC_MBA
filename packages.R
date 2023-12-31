@@ -2,7 +2,7 @@
 # Pacotes -----------------------------------------------------------------
 
 #remotes::install_github("rfsaldanha/microdatasus")
-library(microdatasus)
+# library(microdatasus)
 library(tidyverse)
 
 
@@ -19,3 +19,7 @@ library(corrplot)
 library(factoextra)
 library(psych)
 library(plotly)
+library(Hmisc)
+
+# a <- c("odbc", "PNADcIBGE", "factoextra", "latticeExtra")
+# install.packages(a)

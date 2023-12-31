@@ -22,6 +22,7 @@ db <- conecta_base()
 idade <- read_any(db, "ibge_idade")
 raca <- read_any(db, "ibge_raca")
 alf <- read_any(db, "ibge_alfabetizacao")
+renda <- read_any(db, "ibge_renda")
 
 mun_int <- read_any(db, "mun_interesse")
 
@@ -58,6 +59,7 @@ idade_int <- idade %>%
   left_join(ref_idade, by = c("group_age" = "groups")) %>% 
   select(-group_age) %>% 
   pivot_wider(names_from = idade_pt, values_from = prop_age)
+
   
 
 ref_raca <- read_any(db, "ref_raca") %>% 
@@ -71,7 +73,20 @@ raca_int <- raca %>%
 alf_int <- alf %>% 
   filter(id_mun %in% mun_int$id_mun)
 
+ref_renda <- read_any(db, "ref_renda") %>% select(groups, renda_pt)
 
+renda_int <- renda %>% 
+  filter(id_mun %in% mun_int$id_mun) %>% 
+  pivot_longer(., 3:ncol(.), names_to = "Grupo", values_to = "Valor") %>% 
+  left_join(ref_renda, by = c("Grupo" = "groups")) %>% 
+  group_by(id_mun) %>%
+  filter(Grupo != "total") %>% 
+  mutate(
+    p = Valor/sum(Valor)
+  ) %>% 
+  select(id_mun, renda_pt, p) %>% 
+  pivot_wider(names_from = renda_pt, values_from = p)
+  
 file_path= "plots/correlation_ibge.png"
 png(height=8, width=8, units = "in", file=file_path, type = "cairo", res = 300)
 
@@ -80,6 +95,7 @@ png(height=8, width=8, units = "in", file=file_path, type = "cairo", res = 300)
 idade_int %>% 
   left_join(raca_int) %>% 
   left_join(alf_int) %>% 
+  left_join(renda_int) %>% 
   rename(`Proporção de alfabetizados` = prop_alf) %>% 
   select(-1) %>% 
   as.matrix() %>% 
@@ -91,18 +107,70 @@ idade_int %>%
 dev.off()
 
 
+idade_int %>% 
+  left_join(raca_int) %>% 
+  left_join(alf_int) %>% 
+  left_join(renda_int) %>% 
+  rename(`Proporção de alfabetizados` = prop_alf) %>% 
+  select(-1) %>% 
+  names() %>% paste(collapse = ", ")
 
+r <- idade_int %>% 
+  left_join(raca_int) %>% 
+  left_join(alf_int) %>% 
+  left_join(renda_int) %>% 
+  rename(`Proporção de alfabetizados` = prop_alf) %>% 
+  select(-1) %>% 
+  as.matrix() %>% 
+  cor(method = "pearson")
+
+R <- structure(as.vector(r), .Dimnames = names(r), .Dim = c(28L, 28L))
+
+cortest.bartlett(R, n = 39)
+
+a <- determinant(r)$modulus
+
+log(a[1])
+
+r <- idade_int %>% 
+  left_join(raca_int) %>% 
+  left_join(alf_int) %>% 
+  left_join(renda_int) %>% 
+  rename(`Proporção de alfabetizados` = prop_alf) %>% 
+  select(-1) %>% 
+  as.matrix() %>%
+  rcorr(type="pearson")
+
+determinant(as.matrix(r$r))$modulus
+
+mat_lu <- Matrix::lu(r)
+a <- Matrix::expand(mat_lu)
+
+determinant(as.matrix(a$L))
+determinant(as.matrix(a$U))
+
+isSymmetric.matrix(r)
+
+chol(r)
 ## K-means -----------------------------------------
 
+# idade_int %>% 
+#   left_join(raca_int) %>% 
+#   left_join(alf_int) %>% 
+#   left_join(renda_int) %>% 
+#   rename(`Proporção de alfabetizados` = prop_alf) %>% 
+#   select(-1) %>% 
+  # as.matrix()
 
 dados <- idade_int %>% 
   left_join(raca_int) %>% 
   left_join(alf_int) %>% 
+  left_join(renda_int) %>% 
   rename(`Proporção de alfabetizados` = prop_alf)
 
 
 df <- dados %>% 
-  mutate_at(2:21, ~ as.vector(scale(.)))
+  mutate_at(2:29, ~ as.vector(scale(.)))
 
 df %>% 
   select(-1) %>% 
@@ -113,7 +181,7 @@ df %>%
 fviz_nbclust(kmeans, method = "silhouette")+
   labs(x = "Número de agrupamentos", y = "Largura média da silhueta",
        title = "Número ótimo de agrupamentos")+
-  geom_vline(xintercept = 4, linetype = "dotted")+
+  geom_vline(xintercept = 6, linetype = "dotted")+
   scale_y_continuous(labels = virgula)+
   tema+
   theme(
@@ -122,18 +190,19 @@ fviz_nbclust(kmeans, method = "silhouette")+
 
 ggsave("plots/silhueta.png", device = "png", dpi = 300, width = 4, height = 3)
 
+set.seed(123)     
 # Teste com 2
 k2 <- df %>% 
   select(-1) %>% 
   kmeans(2)
 k2$cluster
 
-# Teste com 4
-k4 <- df %>% 
+set.seed(54623)     
+# Teste com 6
+k6 <- df %>% 
   select(-1) %>% 
-  kmeans(4)
-k4$cluster
-
+  kmeans(6, iter.max = 500, nstart = 50)
+k6$cluster
 
 ## PCA ---------------------------------------------------------------------
 
@@ -151,17 +220,19 @@ pca <- dados %>%
 pca$Vaccounted
 pca$values
 
-# 4 variáveis
-df_f <- as.data.frame(pca$scores[, 1:4])
+# 5 variáveis
+df_f <- as.data.frame(pca$scores[, 1:5])
 df_f$id_mun <- dados$id_mun
-df_f$cluster <- as.factor(k4$cluster)
+df_f$cluster <- as.factor(k6$cluster)
 
+hull =  df_f %>% group_by(cluster) %>% slice(chull(PC1, PC2))
 
 df_f %>% 
   as.data.frame() %>% 
   ggplot()+
   geom_point(aes(x = PC1, y = PC2, color = cluster, fill = cluster), shape = 21, size = 2, stroke = 1)+
   scale_color_manual(values = paleta)+
+  geom_polygon(data = hull, aes(x = PC1, y = PC2, color = cluster, fill = cluster), alpha = 0)+
   scale_fill_manual(values = scales::alpha(c(paleta), 0.5))+
   labs(color = "Grupo", fill = "Grupo")+
   tema
@@ -169,6 +240,9 @@ df_f %>%
 
 ggsave("plots/PCA.png", device = "png", dpi = 300, width = 4.5, height = 4)
 
+
+
+## Continuando -------------------------------------------------------------
 
 
 file_path= "plots/correlation_pca.png"
@@ -179,7 +253,7 @@ png(height=4, width=10, units = "in", file=file_path, type = "cairo", res = 300)
 dados %>% 
   select(-id_mun) %>% 
   as.matrix() %>% 
-  cor(pca$scores[, 1:4]) %>%
+  cor(pca$scores[, 1:5]) %>%
   t() %>% 
   corrplot("pie", tl.col = "black")
 
