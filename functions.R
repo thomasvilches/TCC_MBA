@@ -1,4 +1,9 @@
 
+
+cores <- rcartocolor::carto_pal(12, "Bold")[c(1, 2, 3, 7, 5, 12, 6, 11)]
+
+# scales::show_col(cores)
+
 change_date <- function(x){
   
   if(is.na(x)) return(NA_Date_)

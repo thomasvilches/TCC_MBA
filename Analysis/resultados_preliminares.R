@@ -176,6 +176,9 @@ dados <- idade_int %>%
   left_join(renda_int) %>%
   rename(`Proporção de alfabetizados` = prop_alf)
 
+dados %>% 
+  select(-1) %>% 
+  apply(2, shapiro.test)
 
 df <- dados %>%
   mutate_at(2:29, ~ as.vector(scale(.)))
@@ -312,6 +315,8 @@ dados %>%
   geom_sf(aes(geometry = geometry, fill = cluster)) +
   rcartocolor::scale_fill_carto_d(palette = "Bold")+
   labs(fill = "Grupo", x = "Longitude", y = "Latitude") +
+  scale_x_continuous(labels = virgula) +
+  scale_y_continuous(labels = virgula) +
   # scale_fill_manual(values = scales::alpha(c(paleta), 1))+
   tema +
   # guides(fill = guide_colourbar(
@@ -443,11 +448,14 @@ br
 sp <- br %>%
   filter(grepl("^35", CD_GEOCMU))
 
+mun_int
+
 plot(sp$geometry)
 
 names(df)
 
-df %>%
+pm <- df %>%
+  filter(id_mun %in% mun_int$id_mun) %>% 
   group_by(id_mun, cidade, codibge, ano) %>%
   summarise(
     n = length(unique(id_cnes))
@@ -474,13 +482,14 @@ df %>%
     legend.position = "bottom",
     axis.text = element_blank(),
     axis.ticks = element_blank(),
-    legend.direction = "horizontal"
+    legend.direction = "horizontal",
+    strip.text = element_text(size = 14, face = "bold")
   )
 
-
-
-ggsave("plots/map_cnes.png", device = "png", dpi = 300, width = 9, height = 6)
-
+# 
+# 
+# ggsave("plots/map_cnes.png", device = "png", dpi = 300, width = 9, height = 6)
+# 
 
 
 
@@ -498,6 +507,75 @@ df %>%
   ) %>%
   arrange(desc(prop))
 
+# Série temporal ----------------------------------------------------------
+
+
+
+p1 <- df %>%
+  filter(id_mun %in% mun_int$id_mun) %>% 
+  group_by(id_mun, cidade, codibge, ano) %>%
+  summarise(
+    n = length(unique(id_cnes))
+  ) %>%
+  left_join(pop, by = "id_mun") %>%
+  ungroup() %>%
+  mutate(
+    prop = n * 100000 / total,
+    ano = factor(ano)
+  ) %>%
+  ggplot(aes(y = ano, x = prop, color = ano))+
+  geom_jitter(alpha = 0.5, width = 0.2)+
+  geom_boxplot(width = 0.2, linewidth = 1.1, alpha = 0.0)+
+  labs(y = "Ano", x = "Número de estabelecimentos\npor\n100 mil habitantes")+
+  rcartocolor::scale_color_carto_d(palette = "Bold")+
+  tema+
+  theme(
+    legend.position = "none"
+  )
+
+ggpubr::ggarrange(pm, NULL,p1, widths = c(1, 0.05, 0.5), nrow = 1)
+
+ggsave("plots/juntos.png", device = "png", dpi = 300, width = 10.5, height = 4.0)
+
+
+df %>%
+  filter(id_mun %in% mun_int$id_mun) %>% 
+  group_by(id_mun, cidade, codibge, ano) %>%
+  summarise(
+    n = length(unique(id_cnes))
+  ) %>%
+  left_join(pop, by = "id_mun") %>%
+  ungroup() %>%
+  mutate(
+    prop = n * 100000 / total,
+    ano = factor(ano)
+  ) %>%
+  select(prop, ano) %>% 
+  group_by(ano) %>% 
+  summarise(
+    pvalue = shapiro.test(prop)$p.value
+  )
+
+dd <- df %>%
+  filter(id_mun %in% mun_int$id_mun) %>% 
+  group_by(id_mun, cidade, codibge, ano) %>%
+  summarise(
+    n = length(unique(id_cnes))
+  ) %>%
+  left_join(pop, by = "id_mun") %>%
+  ungroup() %>%
+  mutate(
+    prop = n * 100000 / total,
+    ano = factor(ano)
+  ) %>%
+  select(cidade, prop, ano) %>% 
+  pivot_wider(names_from = "ano", values_from = prop)
+
+# matrixTests::col_wilcoxon_twosample(dd[,c(2:(ncol(dd)-1))], dd[,c(3:ncol(dd))])
+
+n <- names(dd)[-1]
+
+wilcox.test(dd[["2015"]], dd[["2020"]], paired = TRUE)
 
 # Agrupar variaveis -------------------------------------------------------
 
@@ -565,11 +643,12 @@ check_n <- function(df) {
 sn <- check_n(cnes)
 names(sn) <- names(cnes)
 sn
-cnes <- cnes[, sn]
+# cnes <- cnes[, sn]
 
+names(cnes)
 ## Correlacao --------------------------------------------------------------
 
-df <- cnes
+df <- cnes[, sn]
 
 glimpse(df)
 
@@ -597,8 +676,10 @@ pca <- df %>%
 
 pca$Vaccounted
 pca$values
+pca$communality
+pca$loadings
 
-# 4 variáveis
+# 6 variáveis
 df_f <- as.data.frame(pca$scores[, 1:6])
 df_f$id_cnes <- cnes$id_cnes
 
@@ -612,11 +693,51 @@ png(height = 6, width = 11, units = "in", file = file_path, type = "cairo", res 
 df %>%
   select(starts_with("Insta"), starts_with("Leitos")) %>%
   as.matrix() %>%
-  cor(pca$scores[, 1:14], .) %>%
-  t() %>%
+  cor(pca$scores[, 1:6], .) %>%
+  # t() %>%
   corrplot("pie", tl.col = "black")
 
 
 
 # Then
 dev.off()
+
+
+
+# Dados SIA-PA ------------------------------------------------------------
+
+sia <- read_any(db, "sia_pa")
+names(sia)
+sia %>% 
+  filter(is.na(id_cid_prim))
+
+sia %>% 
+  nrow()
+
+cid <- read_any(db, "cid")
+
+head(cid)
+
+cid %>% 
+  mutate(codcid = trimws(codcid, "both")) %>% 
+  filter(grepl("[Cc]ardi", desccid), grepl("[A-Za-z]\\d{2}$", codcid), codcid != "A43") %>% 
+  arrange(desccid) %>% 
+  pull(desccid) %>% unique
+
+cid %>% 
+  mutate(codcid = trimws(codcid, "both")) %>% 
+  filter(grepl("[Cc]ardi", desccid), grepl("[A-Za-z]\\d{2}$", codcid), codcid != "A43") %>% 
+  arrange(desccid) %>% 
+  select(codcid, desccid) %>%
+  mutate(desccid = str_remove(desccid, "^[A-Za-z]\\d{2}\\s+")) %>% 
+  mutate(
+    text = paste0(codcid, "-", desccid)
+  ) %>% 
+  pull(text) %>% paste(collapse = ", ")
+  
+
+
+
+
+cid %>% 
+  filter(codcid == "A52")
