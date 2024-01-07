@@ -130,10 +130,6 @@ r <- idade_int %>%
   as.matrix() %>%
   cor(method = "pearson")
 
-R <- structure(as.vector(r), .Dimnames = names(r), .Dim = c(28L, 28L))
-
-cortest.bartlett(R, n = 39)
-
 a <- determinant(r)$modulus
 
 log(a[1])
@@ -143,11 +139,16 @@ r <- idade_int %>%
   left_join(alf_int) %>%
   left_join(renda_int) %>%
   rename(`Proporção de alfabetizados` = prop_alf) %>%
-  select(-1) %>%
+  select(-1) %>% 
+# select(-all_of(c("0 a 4 anos", "Branca", "Sem rendimento"))) %>%
   as.matrix() %>%
   rcorr(type = "pearson")
 
-# determinant(as.matrix(r$r))$modulus
+determinant(as.matrix(r$r))$modulus
+
+R <- structure(as.vector(r$r), .Dimnames = names(r$r), .Dim = dim(r$r))
+cortest.bartlett(as.matrix(r$r), n = 39)
+
 
 # mat_lu <- Matrix::lu(r)
 # a <- Matrix::expand(mat_lu)
@@ -180,8 +181,9 @@ dados %>%
   select(-1) %>% 
   apply(2, shapiro.test)
 
-df <- dados %>%
-  mutate_at(2:29, ~ as.vector(scale(.)))
+df <- dados  %>%
+  select(-all_of(c("0 a 4 anos", "Branca", "Sem rendimento")))%>%
+  mutate_at(2:26, ~ as.vector(scale(.)))
 
 df %>%
   select(-1) %>%
@@ -219,9 +221,12 @@ k6$cluster
 
 ## PCA ---------------------------------------------------------------------
 
+names(dados)
 
-pca <- dados %>%
+pca <- dados  %>%
+  select(-all_of(c("0 a 4 anos", "Branca", "Sem rendimento")))%>% 
   select(-id_mun) %>%
+  as.matrix() %>% 
   psych::principal(
     r = .,
     nfactors = ncol(.),
@@ -254,6 +259,11 @@ df_f %>%
 
 
 ggsave("plots/agrupamento.png", device = "png", dpi = 300, width = 4.5, height = 4)
+
+df_mun <- df_f
+
+dir.create("outputs")
+write.csv(df_mun, "outputs/result_pca_mun.csv")
 
 ## Gráfico variáveis     ------------------------
 
@@ -294,7 +304,7 @@ p <- dados %>%
   )
 ggsave("plots/agrupamento_medidas.png", plot = p, device = "png", dpi = 300, width = 11, height = 7)
 
-# Mapa grupos   ------------------------
+## Mapa grupos   ------------------------
 
 
 br <- sf::read_sf("../Dados/GIS/BRMUE250GC_SIR.shp")
@@ -348,7 +358,7 @@ png(height = 4, width = 10, units = "in", file = file_path, type = "cairo", res 
 # Your function to plot image goes here
 
 dados %>%
-  select(-id_mun) %>%
+  select(-id_mun, -cluster) %>%
   as.matrix() %>%
   cor(pca$scores[, 1:5]) %>%
   t() %>%
@@ -507,7 +517,7 @@ df %>%
   ) %>%
   arrange(desc(prop))
 
-# Série temporal ----------------------------------------------------------
+## Série temporal ----------------------------------------------------------
 
 
 
@@ -577,7 +587,7 @@ n <- names(dd)[-1]
 
 wilcox.test(dd[["2015"]], dd[["2020"]], paired = TRUE)
 
-# Agrupar variaveis -------------------------------------------------------
+## Agrupar variaveis -------------------------------------------------------
 
 
 names(cnes) <- gsub("qtleitp", "qtleit0", names(cnes))
@@ -646,7 +656,7 @@ sn
 # cnes <- cnes[, sn]
 
 names(cnes)
-## Correlacao --------------------------------------------------------------
+### Correlacao --------------------------------------------------------------
 
 df <- cnes[, sn]
 
@@ -679,10 +689,6 @@ pca$values
 pca$communality
 pca$loadings
 
-# 6 variáveis
-df_f <- as.data.frame(pca$scores[, 1:6])
-df_f$id_cnes <- cnes$id_cnes
-
 
 
 file_path <- "plots/correlation_pca_cnes.png"
@@ -704,19 +710,28 @@ dev.off()
 
 
 
+# 6 variáveis
+df_f <- as.data.frame(pca$scores[, 1:6])
+df_f$id_cnes <- cnes$id_cnes
+df_f$ano <- cnes$ano
+df_f$vinc_sus <- cnes$vinc_sus
+df_f$nivate_a <- cnes$nivate_a
+df_f$nivate_h <- cnes$nivate_h
+df_f$urgemerg <- cnes$urgemerg
+df_f$atendamb <- cnes$atendamb
+df_f$centrcir <- cnes$centrcir
+df_f$centrobs <- cnes$centrobs
+df_f$centrneo <- cnes$centrneo
+df_f$atendhos <- cnes$atendhos
+
+write_csv(df_f, "outputs/dados_pca_cnes.csv")
+
+
 # Dados SIA-PA ------------------------------------------------------------
 
-sia <- read_any(db, "sia_pa")
-names(sia)
-sia %>% 
-  filter(is.na(id_cid_prim))
 
-sia %>% 
-  nrow()
+## checando CIDs --------------------------------------------------------
 
-cid <- read_any(db, "cid")
-
-head(cid)
 
 cid %>% 
   mutate(codcid = trimws(codcid, "both")) %>% 
@@ -734,10 +749,119 @@ cid %>%
     text = paste0(codcid, "-", desccid)
   ) %>% 
   pull(text) %>% paste(collapse = ", ")
-  
+
+
+## SIA ---------------------------------------------------------------------
+
+
+
+pop <- odbc::dbGetQuery(db, "select id_mun, total from ibge_idade")
+
+cid <- read_any(db, "cid")
+mun <- read_any(db, "ibge_cidades")
+sia <- read_any(db, "sia_pa")
+names(sia)
+
+sia <- sia %>% 
+  filter(!is.na(id_cid_prim))
+
+sia %>% 
+  nrow()
+
+cid_int <- cid %>% 
+  mutate(codcid = trimws(codcid, "both")) %>% 
+  filter(grepl("[Cc]ardi", desccid), grepl("[A-Za-z]\\d{2}$", codcid),
+         codcid != "A43") %>% 
+  pull(codcid)
+
+
+names(sia)
+
+sia %>%
+  filter(dt_realiz > dt_proces)
+
+sia <- sia %>%
+  left_join(cid, by = c("id_cid_prim" = "idcid")) %>% 
+  mutate(
+    cid_t = strtrim(codcid, 3)
+  ) %>% filter(cid_t %in% cid_int) %>% 
+  group_by(idcnes, id_mun_pct, dt_realiz) %>% 
+  summarise(
+    produzido = sum(pa_qtdpro),
+    aprovado = sum(pa_qtdaprov)
+  )
+
+
+
+ggplot(sia, aes(x = dt_realiz, y = produzido, color = as.factor(id_mun_pct)))+
+  geom_point()
+
+
+scientific_10 <- function(x) {
+  parse(text=gsub("e([+\\-])", " %*% 10^\\1", scales::scientific_format()(x)))
+}
+
+p1 <- sia %>% 
+  left_join(mun, by = c("id_mun_pct" = "idmun")) %>% 
+  left_join(pop, by = c("id_mun_pct" = "id_mun")) %>% 
+  mutate(
+    produzido100 = produzido*100000/total
+  ) %>% 
+ggplot(aes(y = cidade, x = produzido100, color = cidade))+
+  geom_boxplot(size = 1.2)+
+  scale_x_continuous(trans = "log",
+                     labels = scientific_10
+                     )+
+  scale_color_viridis_d()+
+  labs(x = "Quantidade produzida\npor\n100 mil habitantes", y = "Município de residência")+
+  tema+
+  theme(
+    legend.position = "none",
+    plot.margin = unit(c(0,1.5,0,0), "cm")
+  )
+p1
+
+ggsave("plots/number_proc.png", plot = p1, device = "png", dpi = 300, width = 7.5, height = 7)
+
+
+
+## Arrumando dados ---------------------------------------------------------
 
 
 
 
-cid %>% 
-  filter(codcid == "A52")
+
+## Testes variável dependente ----------------------------------------------
+
+
+
+################################################################################
+#            TESTE DE SUPERDISPERSÃO DE CAMERON E TRIVEDI (1990)               #
+################################################################################
+#CAMERON, A. C.; TRIVEDI, P. K. Regression-based tests for overdispersion in
+#the Poisson model. Journal of Econometrics, v. 46, n. 3, p. 347-364, 1990.
+
+#1º Passo: estimar um modelo Poisson;
+#2º Passo: criar uma nova variável (Y*) utilizando os fitted values do modelo
+#Poisson estimado anteriormente;
+#3º Passo: estimar um modelo auxiliar OLS, com a variável Y* como variável
+#dependente, os fitted values do modelo Poisson como única variável preditora e 
+#sem o intercepto;
+#4º Passo: Observar a significância do parâmetro beta.
+
+#Adicionando os fitted values do modelo Poisson (lambda_poisson) à base de dados:
+corruption$lambda_poisson <- modelo_poisson$fitted.values
+
+#Criando a nova variável Y*:
+attach(corruption)
+corruption$ystar <- (((violations - lambda_poisson) ^ 2)
+                     - violations) / lambda_poisson
+detach(corruption)
+
+#Estimando o modelo auxiliar OLS, sem o intercepto:
+modelo_auxiliar <- lm(formula = ystar ~ 0 + lambda_poisson,
+                      data = corruption)
+
+#Observando os parâmetros do modelo_auxiliar
+summary(modelo_auxiliar)
+
