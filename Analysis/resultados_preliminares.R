@@ -822,12 +822,12 @@ cc <- lapply(arquivos, checando_sia)
 cc1 <- lapply(cc, function(x) if(is.data.frame(x[[1]])) return(x[[1]]))
 
 cc1 <- Reduce(rbind, cc1)
-write.csv(cc1, "outputs/robust_mun.csv")
+write.csv(cc1, "outputs/robust_mun1.csv")
   
 cc2 <- lapply(cc, function(x) if(is.data.frame(x[[2]])) return(x[[2]]))
 
 cc2 <- Reduce(rbind, cc2)
-write.csv(cc1, "outputs/robust_mun.csv")
+write.csv(cc2, "outputs/robust_mun2.csv")
 
 
 p1 <- cc1 %>% 
