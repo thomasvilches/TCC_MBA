@@ -751,6 +751,148 @@ cid %>%
   pull(text) %>% paste(collapse = ", ")
 
 
+## Robustez da base de dados -----------------------------------------------
+
+arquivos <- list.files("../Dados/SIA_PA/", full.names = TRUE)
+
+cids <- read_any(db, "cid")
+
+cids %>% 
+  filter(grepl("0000", codcid))
+
+cids %>% 
+  filter(grepl("CID NCO IDENTIFICADO|CID NAO INFORMADO", desccid)) %>% 
+  arrange(idcid)
+
+cids %>% 
+  filter(idcid >= 14254) %>% 
+  pull(desccid) %>% unique
+
+x <- arquivos[1]
+
+
+IBGE_cidades <- read_any(db, "ibge_cidades")
+IBGE_cidades$codibge_mod <- strtrim(IBGE_cidades$codibge, 6)
+
+checando_sia <- function(x){
+  print(x)
+  dados <- read.dbc::read.dbc(x)
+  
+  n_linhas <- nrow(dados)
+  
+  df1 <- dados %>% 
+    mutate(codibge_mod = PA_MUNPCN, n_linhas = n_linhas,
+           file = str_extract(x, "SIA_PA/.*")) %>% 
+    left_join(IBGE_cidades, by = "codibge_mod") %>%
+    filter(is.na(idmun), (grepl("^35", PA_MUNPCN) | grepl("^99", PA_MUNPCN)))
+  
+  if(nrow(df1) > 0){
+    df1 <- df1 %>% 
+      group_by(PA_MUNPCN) %>% 
+      summarise(
+        n = n(),
+        n_linhas = unique(n_linhas),
+        file = unique(file)
+      )
+  }else
+    df1 <- 0
+  
+  df2 <- dados %>%
+    mutate(codcid = PA_CIDPRI, n_linhas = n_linhas,
+           file = str_extract(x, "SIA_PA/.*")) %>% 
+    trocar_id(db, ., "codcid", "idcid", "cid") %>% 
+    filter(is.na(idcid) | idcid >= 14254) 
+  
+  if(nrow(df2) > 0){
+    df2 <- df2 %>% 
+      group_by(PA_CIDPRI) %>% 
+      summarise(
+        n = n(),
+        n_linhas = unique(n_linhas),
+        file = unique(file)
+      )
+  }else
+    df2 <- 0
+  
+  return(list(df1, df2))
+}
+  
+cc <- lapply(arquivos, checando_sia)
+  
+cc1 <- lapply(cc, function(x) if(is.data.frame(x[[1]])) return(x[[1]]))
+
+cc1 <- Reduce(rbind, cc1)
+write.csv(cc1, "outputs/robust_mun.csv")
+  
+cc2 <- lapply(cc, function(x) if(is.data.frame(x[[2]])) return(x[[2]]))
+
+cc2 <- Reduce(rbind, cc2)
+write.csv(cc1, "outputs/robust_mun.csv")
+
+
+p1 <- cc1 %>% 
+  group_by(file) %>% 
+  summarise(
+    n = sum(n),
+    linhas = unique(n_linhas)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    aux = str_extract(file, "(?<=PASP)\\d{2}"),
+    ano = as.integer(paste0("20", aux))
+  ) %>% 
+  group_by(ano) %>% 
+  summarise(
+    n = sum(n),
+    linhas = sum(linhas)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    p = n/linhas,
+    ano = as.factor(ano)
+  ) %>% 
+  ggplot()+
+  geom_col(aes(x = ano, y = p), color = cores[1], fill = cores[1],
+           width = 0.3)+
+  labs(x = "Ano", y = "Proporção de dados sem município de residência")+
+  tema
+
+
+
+p2 <- cc2 %>% 
+  group_by(file) %>% 
+  summarise(
+    n = sum(n),
+    linhas = unique(n_linhas)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    aux = str_extract(file, "(?<=PASP)\\d{2}"),
+    ano = as.integer(paste0("20", aux))
+  ) %>% 
+  group_by(ano) %>% 
+  summarise(
+    n = sum(n),
+    linhas = sum(linhas)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    p = n/linhas,
+    ano = as.factor(ano)
+  ) %>% 
+  ggplot()+
+  geom_col(aes(x = ano, y = p), color = cores[2], fill = cores[2],
+           width = 0.3)+
+  labs(x = "Ano", y = "Proporção de dados sem CID-10")+
+  tema
+
+
+ggpubr::ggarrange(p1, NULL,p2, widths = c(0.5, 0.05, 0.5), nrow = 1)
+
+ggsave("plots/robust.png", device = "png", dpi = 300, width = 10.5, height = 5.5)
+
+
+
 ## SIA ---------------------------------------------------------------------
 
 
