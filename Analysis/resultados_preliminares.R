@@ -1004,23 +1004,27 @@ proc_int <- proc %>%
          idproc != 2650) %>% 
   pull(idproc)
 
+proc_int <- proc %>% 
+  mutate(codproc = trimws(codproc, "both")) %>% 
+  filter(grepl("^0209", codproc)) %>% 
+  pull(idproc)
+
 names(sia)
 
 sia %>%
   filter(dt_realiz > dt_proces)
 
+# 929 - colonoscopia
+
 sia <- sia %>% 
-  filter(id_ %in% proc_int) %>% 
+  filter(id_proc %in% c(929)) %>% 
   group_by(idcnes, id_mun_pct, dt_realiz) %>% 
   summarise(
     produzido = sum(pa_qtdpro),
     aprovado = sum(pa_qtdaprov)
-  )
+  ) %>% ungroup()
 
 
-
-ggplot(sia, aes(x = dt_realiz, y = produzido, color = as.factor(id_mun_pct)))+
-  geom_point()
 
 
 scientific_10 <- function(x) {
@@ -1050,15 +1054,63 @@ p1
 ggsave("plots/number_proc.png", plot = p1, device = "png", dpi = 300, width = 7.5, height = 7)
 
 
+
+# Série temporal ----------------------------------------------------------
+
+sia %>%
+  left_join(pop, by = c("id_mun_pct" = "id_mun")) %>% 
+  mutate(
+    produzido100 = produzido*100000/total
+  ) %>% 
+  group_by(dt_realiz, id_mun_pct) %>% 
+  summarise(
+    soma = sum(produzido100)
+  ) %>% 
+  ggplot(aes(y = soma, x = dt_realiz, color = as.factor(id_mun_pct)))+
+  geom_point(size = 1.2)+
+  scale_y_continuous(#trans = "linear",
+                     labels = scientific_10
+  )+
+  scale_color_viridis_d()+
+  labs(y = "Quantidade produzida\npor\n100 mil habitantes",
+       x = "Ano")+
+  tema+
+  theme(
+    legend.position = "none",
+    plot.margin = unit(c(0,1.5,0,0), "cm")
+  )
+
+
+
 ## Arrumando dados ---------------------------------------------------------
 
+dados_mun <- read.csv("outputs/result_pca_mun.csv")
+dados_cnes <- read.csv("outputs/dados_pca_cnes.csv")
 
+glimpse(dados_mun)
+glimpse(dados_cnes)
+glimpse(sia)
 
+teste <- sia %>%
+  left_join(pop, by = c("id_mun_pct" = "id_mun")) %>% 
+  mutate(
+    produzido100 = floor(produzido*1000000/total)
+  ) %>% pull(produzido100)
 
+sum(teste >= 1)/length(teste)
 
-## Testes variável dependente ----------------------------------------------
-
-
+sia %>%
+  left_join(pop, by = c("id_mun_pct" = "id_mun")) %>% 
+  mutate(
+    produzido100 = floor(produzido*1000000/total),
+    ano = year(dt_realiz)
+  ) %>% 
+  left_join(dados_mun, by = c("id_mun_pct" = "id_mun")) %>% 
+  left_join(dados_cnes, by = c("idcnes" = "id_cnes", "ano"),
+            suffix = c(".mun", ".cnes")) %>%
+  ungroup() %>% 
+  select(-cluster, -aprovado, -total, -ano, -X, -produzido, -idcnes, -id_mun_pct) %>% 
+  glimpse
 
 ################################################################################
 #            TESTE DE SUPERDISPERSÃO DE CAMERON E TRIVEDI (1990)               #
