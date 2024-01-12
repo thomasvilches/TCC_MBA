@@ -830,7 +830,7 @@ cc2 <- Reduce(rbind, cc2)
 write.csv(cc2, "outputs/robust_mun2.csv")
 
 
-p1 <- cc1 %>% 
+d1 <- cc1 %>% 
   group_by(file) %>% 
   summarise(
     n = sum(n),
@@ -850,16 +850,11 @@ p1 <- cc1 %>%
   mutate(
     p = n/linhas,
     ano = as.factor(ano)
-  ) %>% 
-  ggplot()+
-  geom_col(aes(x = ano, y = p), color = cores[1], fill = cores[1],
-           width = 0.3)+
-  labs(x = "Ano", y = "Proporção de dados sem município de residência")+
-  tema
+  )
 
+d1$Tipo = "Município"
 
-
-p2 <- cc2 %>% 
+d2 <- cc2 %>% 
   group_by(file) %>% 
   summarise(
     n = sum(n),
@@ -879,17 +874,24 @@ p2 <- cc2 %>%
   mutate(
     p = n/linhas,
     ano = as.factor(ano)
-  ) %>% 
+  )
+
+d2$Tipo = "CID-10"
+ 
+bind_rows(d1, d2) %>% 
   ggplot()+
-  geom_col(aes(x = ano, y = p), color = cores[2], fill = cores[2],
-           width = 0.3)+
-  labs(x = "Ano", y = "Proporção de dados sem CID-10")+
+  geom_col(aes(x = ano, y = p, color = Tipo, fill = Tipo),
+           width = 0.5, position = position_dodge2())+
+  labs(x = "Ano", y = "Proporção de dados faltantes",
+       color = "Dados", fill = "Dados")+
+  scale_color_manual(values = cores[1:2])+
+  scale_fill_manual(values = cores[1:2])+
   tema
 
 
-ggpubr::ggarrange(p1, NULL,p2, widths = c(0.5, 0.05, 0.5), nrow = 1)
+# ggpubr::ggarrange(p1, NULL,p2, widths = c(0.5, 0.05, 0.5), nrow = 1)
 
-ggsave("plots/robust.png", device = "png", dpi = 300, width = 10.5, height = 5.5)
+ggsave("plots/robust.png", device = "png", dpi = 300, width = 5.5, height = 3.5)
 
 
 
@@ -900,9 +902,12 @@ ggsave("plots/robust.png", device = "png", dpi = 300, width = 10.5, height = 5.5
 pop <- odbc::dbGetQuery(db, "select id_mun, total from ibge_idade")
 
 cid <- read_any(db, "cid")
+
 mun <- read_any(db, "ibge_cidades")
 sia <- read_any(db, "sia_pa")
 names(sia)
+names(proc)
+head(proc)
 
 sia <- sia %>% 
   filter(!is.na(id_cid_prim))
@@ -965,6 +970,84 @@ p1
 
 ggsave("plots/number_proc.png", plot = p1, device = "png", dpi = 300, width = 7.5, height = 7)
 
+
+
+## Procedimentos -----------------------------------------------------------
+proc <- read_any(db, "procedimentos")
+
+cid <- read_any(db, "cid")
+
+mun <- read_any(db, "ibge_cidades")
+sia <- read_any(db, "sia_pa")
+
+sia %>% 
+  nrow()
+
+proc %>% 
+  mutate(descproc = trimws(descproc, "both")) %>% 
+  filter(grepl("CARDI", descproc), grepl("TRATAM", descproc)) %>% 
+  select(idproc, descproc)
+
+proc %>% 
+  mutate(descproc = trimws(descproc, "both")) %>% 
+  filter(grepl("CARDI", descproc), grepl("TRATAM", descproc),
+         idproc != 2650) %>% 
+  select(idproc, descproc) %>% 
+  pull(descproc) %>% 
+  tolower() %>% 
+  paste(collapse = ", ")
+
+
+proc_int <- proc %>% 
+  mutate(descproc = trimws(descproc, "both")) %>% 
+  filter(grepl("CARDI", descproc), grepl("TRATAM", descproc),
+         idproc != 2650) %>% 
+  pull(idproc)
+
+names(sia)
+
+sia %>%
+  filter(dt_realiz > dt_proces)
+
+sia <- sia %>% 
+  filter(id_ %in% proc_int) %>% 
+  group_by(idcnes, id_mun_pct, dt_realiz) %>% 
+  summarise(
+    produzido = sum(pa_qtdpro),
+    aprovado = sum(pa_qtdaprov)
+  )
+
+
+
+ggplot(sia, aes(x = dt_realiz, y = produzido, color = as.factor(id_mun_pct)))+
+  geom_point()
+
+
+scientific_10 <- function(x) {
+  parse(text=gsub("e([+\\-])", " %*% 10^\\1", scales::scientific_format()(x)))
+}
+
+p1 <- sia %>% 
+  left_join(mun, by = c("id_mun_pct" = "idmun")) %>% 
+  left_join(pop, by = c("id_mun_pct" = "id_mun")) %>% 
+  mutate(
+    produzido100 = produzido*100000/total
+  ) %>% 
+  ggplot(aes(y = cidade, x = produzido100, color = cidade))+
+  geom_boxplot(size = 1.2)+
+  scale_x_continuous(trans = "log",
+                     labels = scientific_10
+  )+
+  scale_color_viridis_d()+
+  labs(x = "Quantidade produzida\npor\n100 mil habitantes", y = "Município de residência")+
+  tema+
+  theme(
+    legend.position = "none",
+    plot.margin = unit(c(0,1.5,0,0), "cm")
+  )
+p1
+
+ggsave("plots/number_proc.png", plot = p1, device = "png", dpi = 300, width = 7.5, height = 7)
 
 
 ## Arrumando dados ---------------------------------------------------------

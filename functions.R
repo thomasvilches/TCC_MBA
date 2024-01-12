@@ -78,7 +78,7 @@ trocar_id <- function(con, df, X, Z, tabY){
 }
 
 
-append_sia <- function(x){
+append_sia <- function(x, db){
   
   print(x)
   dados_raw <- read.dbc(x)
@@ -175,13 +175,13 @@ append_sia <- function(x){
   
   
   dados <- dados %>% 
-    group_by(idcnes, id_mun_pct, dt_realiz, dt_proces, id_cid_prim) %>% 
+    group_by(idcnes, id_proc, id_mun_pct, dt_realiz, dt_proces, id_cid_prim) %>% 
     summarise(
       pa_qtdpro = sum(PA_QTDPRO, na.rm = TRUE),
       pa_qtdaprov = sum(PA_QTDAPR, na.rm = TRUE)
     )
   
-  tipos <- dbDataType(db, dados)
+  tipos <- dbDataType(con, dados)
   
   
   msg <- paste("CREATE TABLE sia_pa (
