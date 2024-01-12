@@ -1068,9 +1068,9 @@ sia %>%
   ) %>% 
   ggplot(aes(y = soma, x = dt_realiz, color = as.factor(id_mun_pct)))+
   geom_point(size = 1.2)+
-  scale_y_continuous(#trans = "linear",
-                     labels = scientific_10
-  )+
+  # scale_y_continuous(#trans = "linear",
+  #                    labels = scientific_10
+  # )+
   scale_color_viridis_d()+
   labs(y = "Quantidade produzida\npor\n100 mil habitantes",
        x = "Ano")+
@@ -1079,6 +1079,8 @@ sia %>%
     legend.position = "none",
     plot.margin = unit(c(0,1.5,0,0), "cm")
   )
+
+ggsave("plots/number_proc_time.png", device = "png", dpi = 300, width = 9.5, height = 4)
 
 
 
