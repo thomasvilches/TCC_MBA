@@ -325,7 +325,7 @@ idades <- nomes %>% gsub("ag", "", .) %>%
 ages <- nomes %>% gsub("ag", "", .) %>%
   gsub("to", " to ", .) %>% gsub("(\\d+)$", "\\1 years", .) %>% gsub("plus", "+ years", .)
 
-df <- data.frame(groups = nomes, idade_pt = idades, idade_en = idades)
+df <- data.frame(groups = nomes, idade_pt = idades, idade_en = ages)
 
 
 msg <- paste("CREATE TABLE ref_idades (
