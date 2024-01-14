@@ -986,7 +986,7 @@ sia %>%
 proc %>% 
   mutate(descproc = trimws(descproc, "both")) %>% 
   filter(grepl("CARDI", descproc), grepl("TRATAM", descproc)) %>% 
-  select(idproc, descproc)
+  select(idproc, descproc) %>% View
 
 proc %>% 
   mutate(descproc = trimws(descproc, "both")) %>% 
@@ -1099,7 +1099,7 @@ teste <- sia %>%
 
 sum(teste >= 1)/length(teste)
 
-sia %>%
+df_f <- sia %>%
   left_join(pop, by = c("id_mun_pct" = "id_mun")) %>% 
   mutate(
     produzido100 = floor(produzido*1000000/total),
@@ -1109,8 +1109,146 @@ sia %>%
   left_join(dados_cnes, by = c("idcnes" = "id_cnes", "ano"),
             suffix = c(".mun", ".cnes")) %>%
   ungroup() %>% 
-  select(-cluster, -aprovado, -total, -ano, -X, -produzido, -idcnes, -id_mun_pct) %>% 
-  glimpse
+  select(-cluster, -aprovado, -total, -ano, -X,
+         -produzido, idcnes, id_mun_pct) %>% 
+  mutate(
+    dia = as.integer(dt_realiz - min(dt_realiz)),
+    id_mun_pct = as.factor(id_mun_pct),
+    idcnes = as.factor(idcnes)
+  )
+glimpse(df_f)
+
+## Completando dados -------------------------------------------------------
+
+
+
+# Modelo GLMM -------------------------------------------------------------
+
+## Poisson -----------------------------------------------------------------
+
+
+library(glmmTMB)
+names(df_f)
+poisson.glm <- glm(produzido100 ~ dia,
+                   data = df_f,
+                   family = "poisson")
+
+#Observando os parâmetros do modelo
+summary(poisson.glm)
+
+#Extração do valor do LL
+logLik(poisson.glm)
+
+
+## Binomial negativo -------------------------------------------------------
+nb.glm <- MASS::glm.nb(produzido100 ~ dia,
+                   data = df_f
+                 )
+
+#Observando os parâmetros do modelo
+summary(nb.glm)
+
+#Extração do valor do LL
+logLik(nb.glm)
+
+
+
+## Multilevel Poisson: efeitos aleatórios-----------------------------------------------------
+
+poisson.glmm <- glmmTMB(formula = produzido100 ~ dia +
+                          (1 | idcnes) + (1 | id_mun_pct),
+                        family = poisson, 
+                        data = df_f)
+
+
+summary(poisson.glmm)
+logLik(poisson.glmm)
+performance::check_overdispersion(poisson.glmm)
+
+## Multilevel Binomial: efeitos aleatórios-----------------------------------------------------
+
+nbin.glmm <- glmmTMB(formula = produzido100 ~ dia +
+                       (1 | idcnes) + (1 | id_mun_pct),
+                     family = nbinom2, 
+                     data = df_f)
+
+summary(nbin.glmm)
+logLik(nbin.glmm)
+
+# binomial negativa não corrigiu o problema de superdispersao
+# continuamos o modelo
+performance::check_zeroinflation(nbin.glmm)
+performance::check_overdispersion(nbin.glmm)
+
+## Multilevel ZI Binomial: efeitos aleatórios-----------------------------------------------------
+
+# segundo o pacote "performance", não há excesso de zeros
+# nbin.glmm.zi <- glmmTMB(formula = produzido100 ~ dia +
+#                        (1 | idcnes) + (1 | id_mun_pct),
+#                      family = nbinom2, 
+#                      ziformula = ~0,
+#                      data = df_f)
+# 
+# summary(nbin.glmm.zi)
+# logLik(nbin.glmm.zi)
+# 
+# performance::check_zeroinflation(nbin.glmm.zi)
+# performance::check_overdispersion(nbin.glmm.zi)
+
+
+# Multinível Binomial Neg: Variaveis --------------------------------------
+
+glimpse(df_f)
+
+paste(names(df_f), collapse = "+")
+nbin.glmm.var <- glmmTMB(formula = produzido100 ~ dia +
+                          (dia+PC1.cnes+PC2.cnes+PC3.cnes+
+                             PC4.cnes+PC5.cnes+PC6+
+                             vinc_sus+nivate_a+nivate_h+
+                             urgemerg+atendamb+centrcir+
+                             centrobs+centrneo+atendhos| idcnes) + 
+                           (dia+PC1.mun+PC2.mun+PC3.mun+PC4.mun+
+                              PC5.mun | id_mun_pct),
+                        family = nbinom2, 
+                        ziformula = ~0,
+                        data = df_f)
+
+
+summary(nbin.glmm.var)
+logLik(nbin.glmm.var)
+
+
+#Decréscimo nos LL's dos modelos
+data.frame(Poisson = logLik(poisson.glm),
+           BNEG = logLik(nbin.glm),
+           Poisson_Multilevel = logLik(poisson.glmm),
+           BNEG_Multilevel = logLik(nbin.glmm)) %>%
+  rename(`Poisson` = 1,
+         `BNEG` = 2,
+         `Poisson Multilevel` = 3,
+         `BNEG Multilevel` = 4) %>%
+  melt() %>%
+  ggplot(aes(x = variable, y = (abs(-value)), fill = factor(variable))) +
+  geom_bar(stat = "identity") +
+  geom_label(aes(label = (round(value,3))), hjust = 1.2, color = "white", size = 7) +
+  labs(title = "Comparação do LL", 
+       y = "LogLik", 
+       x = "Modelo Proposto") +
+  coord_flip() +
+  scale_fill_manual("Legenda:",
+                    values = c("bisque4","coral4","darkorchid","deepskyblue1")) +
+  theme(legend.title = element_blank(), 
+        panel.background = element_rect("white"),
+        legend.position = "none",
+        axis.line = element_line())
+
+
+#Comparação entre os parãmetros dos modelos (atente-se para as diferenças nas
+#magnitudes dos parâmetros!)
+export_summs(poisson.glm, nbin.glm, poisson.glmm, nbin.glmm,
+             model.names = c("POISSON", "BNEG",
+                             "POISSON MULTILEVEL", "BNEG MULTILEVEL"))
+
 
 ################################################################################
 #            TESTE DE SUPERDISPERSÃO DE CAMERON E TRIVEDI (1990)               #

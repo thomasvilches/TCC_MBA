@@ -47,7 +47,7 @@ conecta_base <- function(){
                        password = senha$V1[2],
                        #Servername = "localhost",
                        host = "localhost",
-                       port = 5433#,
+                       port = 5432#,
                        #encoding = "CP1252", 
                        # Encoding of R sessions, Windows R default is "CP1252" (Windows-1252)
                        #clientcharset = "UTF-8"
