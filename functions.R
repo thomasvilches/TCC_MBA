@@ -213,7 +213,7 @@ entra_cnes <- function(Ano, files){
   cnes <- cnes %>% rename(cnes = CNES)
   
   colunas <- c(
-    "cnes",
+    "CNES",
     "CODUFMUN",
     "VINC_SUS",
     "ATIVIDAD",
@@ -321,7 +321,7 @@ entra_cnes <- function(Ano, files){
   
   df <- df %>% 
     relocate(
-      cnes,
+      CNES,
       starts_with("id_"),
       starts_with("DT_"),
       COMPETEN

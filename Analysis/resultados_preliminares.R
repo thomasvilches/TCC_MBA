@@ -447,20 +447,26 @@ df %>%
 
 
 ## GIS ---------------------------------------------------------------------
+# 
+# sp <- sf::read_sf("../Dados/GIS/cidades_SP.shp")
+# 
+# plot(sp$geometry)
+# 
+# br <- sf::read_sf("../Dados/GIS/BRMUE250GC_SIR.shp")
+# br
+# 
+# sp <- br %>%
+#   filter(grepl("^35", CD_GEOCMU))
+# 
+# mun_int
 
-sp <- sf::read_sf("../Dados/GIS/cidades_SP.shp")
-
+sp <- sf::read_sf("GIS/SP_cities.shp")
 plot(sp$geometry)
+# In case some one wants t oreproduce that
+# dir.create("GIS")
+# sf::st_write(sp, "GIS/SP_cities.shp")
 
-br <- sf::read_sf("../Dados/GIS/BRMUE250GC_SIR.shp")
-br
 
-sp <- br %>%
-  filter(grepl("^35", CD_GEOCMU))
-
-mun_int
-
-plot(sp$geometry)
 
 names(df)
 
@@ -629,7 +635,10 @@ names(Newvars2) <- paste("Leitos -", nomes)
 
 
 cnes <- cnes %>%
-  select(seq(1, 15)) %>%
+  select(id_cnes, ano, vinc_sus, nivate_a, nivate_h,
+         leithosp, urgemerg, atendamb,
+         centrcir, centrobs, centrneo,
+         atendhos) %>%
   bind_cols(Newvars) %>%
   bind_cols(Newvars2)
 
@@ -724,32 +733,12 @@ df_f$centrobs <- cnes$centrobs
 df_f$centrneo <- cnes$centrneo
 df_f$atendhos <- cnes$atendhos
 
+glimpse(df_f)
+
 write_csv(df_f, "outputs/dados_pca_cnes.csv")
 
 
 # Dados SIA-PA ------------------------------------------------------------
-
-
-## checando CIDs --------------------------------------------------------
-
-
-cid %>% 
-  mutate(codcid = trimws(codcid, "both")) %>% 
-  filter(grepl("[Cc]ardi", desccid), grepl("[A-Za-z]\\d{2}$", codcid), codcid != "A43") %>% 
-  arrange(desccid) %>% 
-  pull(desccid) %>% unique
-
-cid %>% 
-  mutate(codcid = trimws(codcid, "both")) %>% 
-  filter(grepl("[Cc]ardi", desccid), grepl("[A-Za-z]\\d{2}$", codcid), codcid != "A43") %>% 
-  arrange(desccid) %>% 
-  select(codcid, desccid) %>%
-  mutate(desccid = str_remove(desccid, "^[A-Za-z]\\d{2}\\s+")) %>% 
-  mutate(
-    text = paste0(codcid, "-", desccid)
-  ) %>% 
-  pull(text) %>% paste(collapse = ", ")
-
 
 ## Robustez da base de dados -----------------------------------------------
 
@@ -895,84 +884,9 @@ ggsave("plots/robust.png", device = "png", dpi = 300, width = 5.5, height = 3.5)
 
 
 
-## SIA ---------------------------------------------------------------------
+# Lendo dados SIA ---------------------------------------------------------
 
 
-
-pop <- odbc::dbGetQuery(db, "select id_mun, total from ibge_idade")
-
-cid <- read_any(db, "cid")
-
-mun <- read_any(db, "ibge_cidades")
-sia <- read_any(db, "sia_pa")
-names(sia)
-names(proc)
-head(proc)
-
-sia <- sia %>% 
-  filter(!is.na(id_cid_prim))
-
-sia %>% 
-  nrow()
-
-cid_int <- cid %>% 
-  mutate(codcid = trimws(codcid, "both")) %>% 
-  filter(grepl("[Cc]ardi", desccid), grepl("[A-Za-z]\\d{2}$", codcid),
-         codcid != "A43") %>% 
-  pull(codcid)
-
-
-names(sia)
-
-sia %>%
-  filter(dt_realiz > dt_proces)
-
-sia <- sia %>%
-  left_join(cid, by = c("id_cid_prim" = "idcid")) %>% 
-  mutate(
-    cid_t = strtrim(codcid, 3)
-  ) %>% filter(cid_t %in% cid_int) %>% 
-  group_by(idcnes, id_mun_pct, dt_realiz) %>% 
-  summarise(
-    produzido = sum(pa_qtdpro),
-    aprovado = sum(pa_qtdaprov)
-  )
-
-
-
-ggplot(sia, aes(x = dt_realiz, y = produzido, color = as.factor(id_mun_pct)))+
-  geom_point()
-
-
-scientific_10 <- function(x) {
-  parse(text=gsub("e([+\\-])", " %*% 10^\\1", scales::scientific_format()(x)))
-}
-
-p1 <- sia %>% 
-  left_join(mun, by = c("id_mun_pct" = "idmun")) %>% 
-  left_join(pop, by = c("id_mun_pct" = "id_mun")) %>% 
-  mutate(
-    produzido100 = produzido*100000/total
-  ) %>% 
-ggplot(aes(y = cidade, x = produzido100, color = cidade))+
-  geom_boxplot(size = 1.2)+
-  scale_x_continuous(trans = "log",
-                     labels = scientific_10
-                     )+
-  scale_color_viridis_d()+
-  labs(x = "Quantidade produzida\npor\n100 mil habitantes", y = "Município de residência")+
-  tema+
-  theme(
-    legend.position = "none",
-    plot.margin = unit(c(0,1.5,0,0), "cm")
-  )
-p1
-
-ggsave("plots/number_proc.png", plot = p1, device = "png", dpi = 300, width = 7.5, height = 7)
-
-
-
-## Procedimentos -----------------------------------------------------------
 proc <- read_any(db, "procedimentos")
 
 cid <- read_any(db, "cid")
@@ -980,34 +894,17 @@ cid <- read_any(db, "cid")
 mun <- read_any(db, "ibge_cidades")
 sia <- read_any(db, "sia_pa")
 
-sia %>% 
-  nrow()
-
-proc %>% 
-  mutate(descproc = trimws(descproc, "both")) %>% 
-  filter(grepl("CARDI", descproc), grepl("TRATAM", descproc)) %>% 
-  select(idproc, descproc) %>% View
-
-proc %>% 
-  mutate(descproc = trimws(descproc, "both")) %>% 
-  filter(grepl("CARDI", descproc), grepl("TRATAM", descproc),
-         idproc != 2650) %>% 
-  select(idproc, descproc) %>% 
-  pull(descproc) %>% 
-  tolower() %>% 
-  paste(collapse = ", ")
-
-
-proc_int <- proc %>% 
-  mutate(descproc = trimws(descproc, "both")) %>% 
-  filter(grepl("CARDI", descproc), grepl("TRATAM", descproc),
-         idproc != 2650) %>% 
-  pull(idproc)
-
-proc_int <- proc %>% 
-  mutate(codproc = trimws(codproc, "both")) %>% 
-  filter(grepl("^0209", codproc)) %>% 
-  pull(idproc)
+# 
+# proc_int <- proc %>% 
+#   mutate(descproc = trimws(descproc, "both")) %>% 
+#   filter(grepl("CARDI", descproc), grepl("TRATAM", descproc),
+#          idproc != 2650) %>% 
+#   pull(idproc)
+# 
+# proc_int <- proc %>% 
+#   mutate(codproc = trimws(codproc, "both")) %>% 
+#   filter(grepl("^0209", codproc)) %>% 
+#   pull(idproc)
 
 names(sia)
 
@@ -1016,9 +913,54 @@ sia %>%
 
 # 929 - colonoscopia
 
+
 sia <- sia %>% 
-  filter(id_proc %in% c(929)) %>% 
-  group_by(idcnes, id_mun_pct, dt_realiz) %>% 
+  filter(id_proc %in% c(929)) 
+
+
+
+## Série temporal ----------------------------------------------------------
+
+sia   %>% 
+  group_by(id_mun_pct, dt_realiz) %>% 
+  summarise(
+    produzido = sum(pa_qtdpro),
+    aprovado = sum(pa_qtdaprov)
+  ) %>% 
+  ungroup() %>%
+  left_join(pop, by = c("id_mun_pct" = "id_mun")) %>% 
+  mutate(
+    produzido100 = produzido*100000/total
+  ) %>% 
+  group_by(dt_realiz, id_mun_pct) %>% 
+  summarise(
+    soma = sum(produzido100)
+  ) %>% 
+  ggplot(aes(y = soma, x = dt_realiz, color = as.factor(id_mun_pct)))+
+  geom_point(size = 1.2)+
+  # scale_y_continuous(#trans = "linear",
+  #                    labels = scientific_10
+  # )+
+  scale_color_viridis_d()+
+  labs(y = "Quantidade produzida\npor\n100 mil habitantes",
+       x = "Ano")+
+  tema+
+  theme(
+    legend.position = "none",
+    plot.margin = unit(c(0,1.5,0,0), "cm")
+  )
+
+ggsave("plots/number_proc_time.png", device = "png", dpi = 300, width = 9.5, height = 4)
+
+
+
+
+
+## Agrupando SIA -----------------------------------------------------------
+
+sia <- sia %>%
+  mutate(ano = year(dt_realiz)) %>% 
+  group_by(idcnes, id_mun_pct, ano) %>% 
   summarise(
     produzido = sum(pa_qtdpro),
     aprovado = sum(pa_qtdaprov)
@@ -1026,6 +968,8 @@ sia <- sia %>%
 
 
 
+
+## Procedimentos -----------------------------------------------------------
 
 scientific_10 <- function(x) {
   parse(text=gsub("e([+\\-])", " %*% 10^\\1", scales::scientific_format()(x)))
@@ -1055,36 +999,8 @@ ggsave("plots/number_proc.png", plot = p1, device = "png", dpi = 300, width = 7.
 
 
 
-# Série temporal ----------------------------------------------------------
 
-sia %>%
-  left_join(pop, by = c("id_mun_pct" = "id_mun")) %>% 
-  mutate(
-    produzido100 = produzido*100000/total
-  ) %>% 
-  group_by(dt_realiz, id_mun_pct) %>% 
-  summarise(
-    soma = sum(produzido100)
-  ) %>% 
-  ggplot(aes(y = soma, x = dt_realiz, color = as.factor(id_mun_pct)))+
-  geom_point(size = 1.2)+
-  # scale_y_continuous(#trans = "linear",
-  #                    labels = scientific_10
-  # )+
-  scale_color_viridis_d()+
-  labs(y = "Quantidade produzida\npor\n100 mil habitantes",
-       x = "Ano")+
-  tema+
-  theme(
-    legend.position = "none",
-    plot.margin = unit(c(0,1.5,0,0), "cm")
-  )
-
-ggsave("plots/number_proc_time.png", device = "png", dpi = 300, width = 9.5, height = 4)
-
-
-
-## Arrumando dados ---------------------------------------------------------
+# Arrumando dados ---------------------------------------------------------
 
 dados_mun <- read.csv("outputs/result_pca_mun.csv")
 dados_cnes <- read.csv("outputs/dados_pca_cnes.csv")
@@ -1104,21 +1020,30 @@ sum(teste >= 1)/length(teste)
 df_f <- sia %>%
   left_join(pop, by = c("id_mun_pct" = "id_mun")) %>% 
   mutate(
-    produzido100 = floor(produzido*1000000/total),
-    ano = year(dt_realiz)
+    produzido100 = floor(produzido*1000000/total)
   ) %>% 
   left_join(dados_mun, by = c("id_mun_pct" = "id_mun")) %>% 
   left_join(dados_cnes, by = c("idcnes" = "id_cnes", "ano"),
             suffix = c(".mun", ".cnes")) %>%
   ungroup() %>% 
-  select(-cluster, -aprovado, -total, -ano, -X,
+  select(-cluster, -aprovado, -total, -X,
          -produzido, idcnes, id_mun_pct) %>% 
   mutate(
-    dia = as.integer(dt_realiz - min(dt_realiz)),
+    ano = as.factor(ano),
     id_mun_pct = as.factor(id_mun_pct),
     idcnes = as.factor(idcnes)
-  )
+  ) %>% 
+  filter(!is.na(vinc_sus))
+
+# deletei problemas 55 de
 glimpse(df_f)
+
+cnes %>% 
+  group_by(id_cnes, year) %>% 
+  mutate(dup = any(duplicated(id_cnes, year))) %>% 
+  ungroup() %>% filter(dup) %>% View
+
+
 
 ## Completando dados -------------------------------------------------------
 
@@ -1131,7 +1056,7 @@ glimpse(df_f)
 
 library(glmmTMB)
 names(df_f)
-poisson.glm <- glm(produzido100 ~ dia,
+poisson.glm <- glm(produzido100 ~ ano,
                    data = df_f,
                    family = "poisson")
 
@@ -1141,11 +1066,52 @@ summary(poisson.glm)
 #Extração do valor do LL
 logLik(poisson.glm)
 
+# poisson com todas as variaveis
+poisson.glm.comp <- glm(formula = produzido100 ~ ano +
+                           PC1.cnes+PC2.cnes+PC3.cnes+
+                              PC4.cnes+PC5.cnes+PC6+
+                              vinc_sus+nivate_a+nivate_h+
+                              urgemerg+atendamb+centrcir+
+                              centrobs+centrneo+atendhos + 
+                           PC1.mun+PC2.mun+PC3.mun+PC4.mun+
+                              PC5.mun,
+                        family = "poisson", 
+                         data = df_f)
+
+
+summary(poisson.glm.comp)
+logLik(poisson.glm.comp)
+
+# O modelo detecta ZI e overdispersion
+performance::check_zeroinflation(poisson.glm.comp)
+performance::check_overdispersion(poisson.glm.comp)
+
+
 
 ## Binomial negativo -------------------------------------------------------
-nb.glm <- MASS::glm.nb(produzido100 ~ dia,
+nb.glm <- MASS::glm.nb(formula = produzido100 ~ ano +
+                         PC1.cnes+PC2.cnes+PC3.cnes+
+                         PC4.cnes+PC5.cnes+PC6+
+                         vinc_sus+nivate_a+nivate_h+
+                         urgemerg+atendamb+centrcir+
+                         centrobs+centrneo+atendhos + 
+                         PC1.mun+PC2.mun+PC3.mun+PC4.mun+
+                         PC5.mun,
                    data = df_f
                  )
+
+nb.glm2 <- glmmTMB(formula = produzido100 ~ ano +
+                         PC1.cnes+PC2.cnes+PC3.cnes+
+                         PC4.cnes+PC5.cnes+PC6+
+                         vinc_sus+nivate_a+nivate_h+
+                         urgemerg+atendamb+centrcir+
+                         centrobs+centrneo+atendhos + 
+                         PC1.mun+PC2.mun+PC3.mun+PC4.mun+
+                         PC5.mun,
+                        family = nbinom2,
+                  ziformula = ~0,
+                       data = df_f
+)
 
 #Observando os parâmetros do modelo
 summary(nb.glm)
@@ -1154,22 +1120,24 @@ summary(nb.glm)
 logLik(nb.glm)
 
 
+# Utilizando a binomial negativa não existe mais ZI
+performance::check_zeroinflation(nb.glm)
 
-## Multilevel Poisson: efeitos aleatórios-----------------------------------------------------
+shapiro.test(nb.glm$residuals)
 
-poisson.glmm <- glmmTMB(formula = produzido100 ~ dia +
-                          (1 | idcnes) + (1 | id_mun_pct),
-                        family = poisson, 
-                        data = df_f)
+# Vamos seguir com um modelo binomial negativo
 
-
-summary(poisson.glmm)
-logLik(poisson.glmm)
-performance::check_overdispersion(poisson.glmm)
 
 ## Multilevel Binomial: efeitos aleatórios-----------------------------------------------------
 
 nbin.glmm <- glmmTMB(formula = produzido100 ~ dia +
+                       PC1.cnes+PC2.cnes+PC3.cnes+
+                       PC4.cnes+PC5.cnes+PC6+
+                       vinc_sus+nivate_a+nivate_h+
+                       urgemerg+atendamb+centrcir+
+                       centrobs+centrneo+atendhos + 
+                       PC1.mun+PC2.mun+PC3.mun+PC4.mun+
+                       PC5.mun +
                        (1 | idcnes) + (1 | id_mun_pct),
                      family = nbinom2, 
                      data = df_f)
@@ -1182,38 +1150,49 @@ logLik(nbin.glmm)
 performance::check_zeroinflation(nbin.glmm)
 performance::check_overdispersion(nbin.glmm)
 
-## Multilevel ZI Binomial: efeitos aleatórios-----------------------------------------------------
-
-# segundo o pacote "performance", não há excesso de zeros
-# nbin.glmm.zi <- glmmTMB(formula = produzido100 ~ dia +
-#                        (1 | idcnes) + (1 | id_mun_pct),
-#                      family = nbinom2, 
-#                      ziformula = ~0,
-#                      data = df_f)
-# 
-# summary(nbin.glmm.zi)
-# logLik(nbin.glmm.zi)
-# 
-# performance::check_zeroinflation(nbin.glmm.zi)
-# performance::check_overdispersion(nbin.glmm.zi)
 
 
-# Multinível Binomial Neg: Variaveis --------------------------------------
+# Multinível Binomial Neg: One level --------------------------------------
 
 glimpse(df_f)
 
-paste(names(df_f), collapse = "+")
-nbin.glmm.var <- glmmTMB(formula = produzido100 ~ dia +
-                          (dia+PC1.cnes+PC2.cnes+PC3.cnes+
-                             PC4.cnes+PC5.cnes+PC6+
-                             vinc_sus+nivate_a+nivate_h+
-                             urgemerg+atendamb+centrcir+
-                             centrobs+centrneo+atendhos| idcnes) + 
-                           (dia+PC1.mun+PC2.mun+PC3.mun+PC4.mun+
-                              PC5.mun | id_mun_pct),
+# paste(names(df_f), collapse = "+")
+# using only one level
+nbin.glmm.var1 <- glmmTMB(formula = produzido100 ~ dia +
+                           PC1.mun+PC2.mun+PC3.mun+PC4.mun+
+                              PC5.mun +
+                           (PC1.cnes+PC2.cnes+PC3.cnes+
+                           PC4.cnes+PC5.cnes+PC6+
+                           vinc_sus+nivate_a+nivate_h+
+                           urgemerg+atendamb+centrcir+
+                           centrobs+centrneo+atendhos| idcnes),
                         family = nbinom2, 
                         ziformula = ~0,
                         data = df_f)
+
+
+summary(nbin.glmm.var1)
+logLik(nbin.glmm.var1)
+
+
+
+# Multinível Binomial Neg: Two level --------------------------------------
+
+glimpse(df_f)
+
+# paste(names(df_f), collapse = "+")
+# using only one level
+nbin.glmm.var <- glmmTMB(formula = produzido100 ~ dia +
+                           (PC1.cnes+PC2.cnes+PC3.cnes+
+                              PC4.cnes+PC5.cnes+PC6+
+                              vinc_sus+nivate_a+nivate_h+
+                              urgemerg+atendamb+centrcir+
+                              centrobs+centrneo+atendhos| idcnes),
+                           (PC1.mun+PC2.mun+PC3.mun+PC4.mun+
+                              PC5.mun | id_mun_pct)+
+                         family = nbinom2, 
+                         ziformula = ~0,
+                         data = df_f)
 
 
 summary(nbin.glmm.var)

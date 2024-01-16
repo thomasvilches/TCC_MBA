@@ -181,18 +181,47 @@ cnes <- read_any(db, "cnes_data")
 nrow(cnes)
 names(cnes)
 
-df <- cnes %>% 
+cnes %>% 
   mutate(
     Ano = year(competen)
   ) %>% 
-  group_by(id_cnes, Ano, id_atv, id_tpest, vinc_sus, nivate_a, nivate_h,
-           leithosp, urgemerg, atendamb, centrcir, centrobs, centrneo, atendhos) %>% 
+  group_by(id_cnes, Ano) %>% 
+  mutate(
+    n = length(unique(id_atv))
+  ) %>% filter(n > 1) %>% arrange(id_cnes, competen)
+
+df1 <- cnes %>% 
+  mutate(
+    Ano = year(competen)
+  ) %>% 
+  group_by(id_cnes, Ano) %>% 
   summarise_at(vars(starts_with("qt")), list(~ mean(., na.rm = TRUE)))
 
 
-tipos <- dbDataType(db, df)
+df2 <- cnes %>% 
+  mutate(
+    Ano = year(competen)
+  ) %>% 
+  group_by(id_cnes, Ano) %>%
+  summarise_at(vars(c(vinc_sus, nivate_a, nivate_h,
+                   leithosp, urgemerg, atendamb,
+                   centrcir, centrobs, centrneo,
+                   atendhos)),
+            list(~ max(as.integer(.), na.rm = TRUE))
+  )
+
+df <- full_join(df1, df2)
+
+nrow(df1)
+nrow(df2)
+nrow(df)
+
 
 names(df) <- tolower(names(df))
+tipos <- dbDataType(db, df)
+
+df <- df %>% mutate(ano = as.integer(ano))
+glimpse(df)
 
 msg <- paste("CREATE TABLE cnes_data_year (
   idcnesdatayear SERIAL PRIMARY KEY,",
@@ -208,6 +237,8 @@ odbc::dbWriteTable(
   row.names = FALSE, append = TRUE
 )
 
+
+df %>% select(id_cnes, ano) %>% unique %>% nrow
 
 # Disconecta --------------------------------------------------------------
 
