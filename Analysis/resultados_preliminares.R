@@ -412,6 +412,23 @@ cnes <- read_any(db, "cnes_data_year")
 
 pop <- odbc::dbGetQuery(db, "select id_mun, total from ibge_idade")
 
+glimpse(cnes)
+
+
+
+df1 <- cnes %>% 
+  group_by(id_cnes) %>% 
+  summarise_at(vars(starts_with("qt")), list(~ mean(., na.rm = TRUE)))
+
+
+df2 <- cnes %>% 
+  group_by(id_cnes) %>%
+  summarise_at(vars(c(vinc_sus)),
+               list(~ max(as.integer(.), na.rm = TRUE))
+  )
+
+
+cnes <- full_join(df1, df2)
 
 
 nrow(cnes)
@@ -738,6 +755,171 @@ glimpse(df_f)
 write_csv(df_f, "outputs/dados_pca_cnes.csv")
 
 
+
+# CNES total --------------------------------------------------------------
+
+
+odbc::dbListTables(db)
+
+cities <- read_any(db, "ibge_cidades")
+estabelecimento <- read_any(db, "estabelecimento")
+cnes <- read_any(db, "cnes_data_year")
+
+pop <- odbc::dbGetQuery(db, "select id_mun, total from ibge_idade")
+
+glimpse(cnes)
+
+
+
+df1 <- cnes %>% 
+  group_by(id_cnes) %>% 
+  summarise_at(vars(starts_with("qt")), list(~ mean(., na.rm = TRUE)))
+
+
+df2 <- cnes %>% 
+  group_by(id_cnes) %>%
+  summarise_at(vars(c(vinc_sus)),
+               list(~ max(as.integer(.), na.rm = TRUE))
+  )
+
+
+cnes <- full_join(df1, df2)
+
+
+## Agrupar variaveis -------------------------------------------------------
+
+
+names(cnes) <- gsub("qtleitp", "qtleit0", names(cnes))
+
+nomes <- c(
+  "Consultório Urg/Emerg", "Repouso Urg/Emerg",
+  "Outros Urg/Emerg", "Consultórios médicos Urg/Emerg",
+  "Clínica Ambulatorial", "Consultório não médico (Ambulat)",
+  "Repouso (Ambulat)", "Outros (Ambulat)", "Centro cirúrgico",
+  "Centro obstétrico", "Neonatal"
+)
+
+idx <- list(
+  c("01", "02", "03", "04"), c("05", "06", "07", "08"),
+  c("09", "10", "11", "12", "13"), c("14"), c("15", "16", "17"),
+  c("18"), c("19", "20", "21", "22"), as.character(seq(23, 30)),
+  c("31", "32", "33"), c("34", "35", "36", "37"), c("38", "39", "40")
+)
+
+vars_list_inst <- lapply(idx, function(x) paste0("qtinst", x))
+vars_list_leito <- lapply(idx, function(x) paste0("qtleit", x))
+
+somar <- function(lista, df) {
+  lista1 <- lista[lista %in% names(df)]
+  rowSums(df[lista1])
+}
+
+Newvars <- lapply(vars_list_inst, somar, df = cnes) %>%
+  Reduce(cbind, .) %>%
+  as.data.frame()
+
+
+Newvars2 <- lapply(vars_list_leito, somar, df = cnes) %>%
+  Reduce(cbind, .) %>%
+  as.data.frame()
+
+names(Newvars) <- paste("Instalação -", nomes)
+names(Newvars2) <- paste("Leitos -", nomes)
+
+
+cnes <- cnes %>%
+  select(id_cnes, vinc_sus) %>%
+  bind_cols(Newvars) %>%
+  bind_cols(Newvars2)
+
+
+check_n <- function(df) {
+  nn <- names(df)
+  teste <- rep(FALSE, length(nn))
+  for (i in 1:length(nn)) {
+    x <- df[[nn[i]]]
+    if (!is.numeric(x)) {
+      teste[i] <- TRUE
+    } else {
+      if (sum(x) > 0) {
+        teste[i] <- TRUE
+      }
+    }
+  }
+  return(teste)
+}
+
+sn <- check_n(cnes)
+names(sn) <- names(cnes)
+sn
+# cnes <- cnes[, sn]
+
+names(cnes)
+### Correlacao --------------------------------------------------------------
+
+df <- cnes[, sn]
+
+glimpse(df)
+
+file_path <- "plots/correlation_cnes_new.png"
+png(height = 8, width = 8, units = "in", file = file_path, type = "cairo", res = 300)
+
+df %>%
+  select(starts_with("Insta"), starts_with("Leitos")) %>%
+  as.matrix() %>%
+  cor() %>%
+  corrplot(method = "pie", type = "lower", tl.col = "black")
+
+dev.off()
+
+pca <- df %>%
+  select(starts_with("Insta"), starts_with("Leitos")) %>%
+  as.matrix() %>%
+  psych::principal(
+    r = .,
+    nfactors = ncol(.),
+    scores = TRUE,
+    rotate = "none"
+  )
+
+
+pca$Vaccounted
+pca$values
+pca$communality
+pca$loadings
+
+
+
+file_path <- "plots/correlation_pca_cnes.png"
+png(height = 6, width = 11, units = "in", file = file_path, type = "cairo", res = 300)
+
+# Your function to plot image goes here
+
+df %>%
+  select(starts_with("Insta"), starts_with("Leitos")) %>%
+  as.matrix() %>%
+  cor(pca$scores[, 1:6], .) %>%
+  # t() %>%
+  corrplot("pie", tl.col = "black")
+
+
+
+# Then
+dev.off()
+
+
+
+# 6 variáveis
+df_f <- as.data.frame(pca$scores[, 1:6])
+df_f$id_cnes <- cnes$id_cnes
+df_f$vinc_sus <- cnes$vinc_sus
+
+
+glimpse(df_f)
+
+write_csv(df_f, "outputs/dados_pca_cnes_new.csv")
+
+
 # Dados SIA-PA ------------------------------------------------------------
 
 ## Robustez da base de dados -----------------------------------------------
@@ -888,34 +1070,23 @@ ggsave("plots/robust.png", device = "png", dpi = 300, width = 5.5, height = 3.5)
 
 
 proc <- read_any(db, "procedimentos")
-
-cid <- read_any(db, "cid")
-
+# cid <- read_any(db, "cid")
+mun_int <- read_any(db, "mun_interesse")
 mun <- read_any(db, "ibge_cidades")
 sia <- read_any(db, "sia_pa")
 
+estabelecimento <- read_any(db, "estabelecimento")
 # 
-# proc_int <- proc %>% 
-#   mutate(descproc = trimws(descproc, "both")) %>% 
-#   filter(grepl("CARDI", descproc), grepl("TRATAM", descproc),
-#          idproc != 2650) %>% 
-#   pull(idproc)
-# 
-# proc_int <- proc %>% 
-#   mutate(codproc = trimws(codproc, "both")) %>% 
-#   filter(grepl("^0209", codproc)) %>% 
-#   pull(idproc)
-
-names(sia)
-
-sia %>%
-  filter(dt_realiz > dt_proces)
 
 # 929 - colonoscopia
 
 
 sia <- sia %>% 
-  filter(id_proc %in% c(929)) 
+  left_join(estabelecimento, by = c("idcnes" = "idcnes")) %>% 
+  filter(
+    id_proc %in% c(929),# filtra colonoscopia
+    id_mun %in% mun_int$id_mun # filtra estabelecimentos nas cidades
+  ) 
 
 
 
@@ -960,7 +1131,7 @@ ggsave("plots/number_proc_time.png", device = "png", dpi = 300, width = 9.5, hei
 
 sia <- sia %>%
   mutate(ano = year(dt_realiz)) %>% 
-  group_by(idcnes, id_mun_pct, ano) %>% 
+  group_by(id_mun, idcnes, ano) %>% 
   summarise(
     produzido = sum(pa_qtdpro),
     aprovado = sum(pa_qtdaprov)
@@ -976,8 +1147,8 @@ scientific_10 <- function(x) {
 }
 
 p1 <- sia %>% 
-  left_join(mun, by = c("id_mun_pct" = "idmun")) %>% 
-  left_join(pop, by = c("id_mun_pct" = "id_mun")) %>% 
+  left_join(mun, by = c("id_mun" = "idmun")) %>% 
+  left_join(pop, by = c("id_mun" = "id_mun")) %>% 
   mutate(
     produzido100 = produzido*100000/total
   ) %>% 
@@ -1003,14 +1174,14 @@ ggsave("plots/number_proc.png", plot = p1, device = "png", dpi = 300, width = 7.
 # Arrumando dados ---------------------------------------------------------
 
 dados_mun <- read.csv("outputs/result_pca_mun.csv")
-dados_cnes <- read.csv("outputs/dados_pca_cnes.csv")
+dados_cnes <- read.csv("outputs/dados_pca_cnes_new.csv")
 
 glimpse(dados_mun)
 glimpse(dados_cnes)
 glimpse(sia)
 
 teste <- sia %>%
-  left_join(pop, by = c("id_mun_pct" = "id_mun")) %>% 
+  left_join(pop, by = c("id_mun" = "id_mun")) %>% 
   mutate(
     produzido100 = floor(produzido*1000000/total)
   ) %>% pull(produzido100)
@@ -1018,35 +1189,24 @@ teste <- sia %>%
 sum(teste >= 1)/length(teste)
 
 df_f <- sia %>%
-  left_join(pop, by = c("id_mun_pct" = "id_mun")) %>% 
+  left_join(pop, by = c("id_mun" = "id_mun")) %>% 
   mutate(
     produzido100 = floor(produzido*1000000/total)
   ) %>% 
-  left_join(dados_mun, by = c("id_mun_pct" = "id_mun")) %>% 
-  left_join(dados_cnes, by = c("idcnes" = "id_cnes", "ano"),
+  left_join(dados_mun, by = c("id_mun" = "id_mun")) %>% 
+  left_join(dados_cnes, by = c("idcnes" = "id_cnes"),
             suffix = c(".mun", ".cnes")) %>%
   ungroup() %>% 
   select(-cluster, -aprovado, -total, -X,
-         -produzido, idcnes, id_mun_pct) %>% 
+         -produzido) %>% 
   mutate(
-    ano = as.factor(ano),
-    id_mun_pct = as.factor(id_mun_pct),
+    # ano = as.factor(ano),
+    id_mun = as.factor(id_mun),
     idcnes = as.factor(idcnes)
   ) %>% 
   filter(!is.na(vinc_sus))
 
-# deletei problemas 55 de
 glimpse(df_f)
-
-cnes %>% 
-  group_by(id_cnes, year) %>% 
-  mutate(dup = any(duplicated(id_cnes, year))) %>% 
-  ungroup() %>% filter(dup) %>% View
-
-
-
-## Completando dados -------------------------------------------------------
-
 
 
 # Modelo GLMM -------------------------------------------------------------
@@ -1055,6 +1215,7 @@ cnes %>%
 
 
 library(glmmTMB)
+
 names(df_f)
 poisson.glm <- glm(produzido100 ~ ano,
                    data = df_f,
@@ -1070,10 +1231,8 @@ logLik(poisson.glm)
 poisson.glm.comp <- glm(formula = produzido100 ~ ano +
                            PC1.cnes+PC2.cnes+PC3.cnes+
                               PC4.cnes+PC5.cnes+PC6+
-                              vinc_sus+nivate_a+nivate_h+
-                              urgemerg+atendamb+centrcir+
-                              centrobs+centrneo+atendhos + 
-                           PC1.mun+PC2.mun+PC3.mun+PC4.mun+
+                              vinc_sus+PC1.mun+PC2.mun+PC3.mun+
+                            PC4.mun+
                               PC5.mun,
                         family = "poisson", 
                          data = df_f)
@@ -1092,9 +1251,7 @@ performance::check_overdispersion(poisson.glm.comp)
 nb.glm <- MASS::glm.nb(formula = produzido100 ~ ano +
                          PC1.cnes+PC2.cnes+PC3.cnes+
                          PC4.cnes+PC5.cnes+PC6+
-                         vinc_sus+nivate_a+nivate_h+
-                         urgemerg+atendamb+centrcir+
-                         centrobs+centrneo+atendhos + 
+                         vinc_sus+ 
                          PC1.mun+PC2.mun+PC3.mun+PC4.mun+
                          PC5.mun,
                    data = df_f
@@ -1103,9 +1260,7 @@ nb.glm <- MASS::glm.nb(formula = produzido100 ~ ano +
 nb.glm2 <- glmmTMB(formula = produzido100 ~ ano +
                          PC1.cnes+PC2.cnes+PC3.cnes+
                          PC4.cnes+PC5.cnes+PC6+
-                         vinc_sus+nivate_a+nivate_h+
-                         urgemerg+atendamb+centrcir+
-                         centrobs+centrneo+atendhos + 
+                         vinc_sus+ 
                          PC1.mun+PC2.mun+PC3.mun+PC4.mun+
                          PC5.mun,
                         family = nbinom2,
@@ -1114,10 +1269,10 @@ nb.glm2 <- glmmTMB(formula = produzido100 ~ ano +
 )
 
 #Observando os parâmetros do modelo
-summary(nb.glm)
+summary(nb.glm2)
 
 #Extração do valor do LL
-logLik(nb.glm)
+logLik(nb.glm2)
 
 
 # Utilizando a binomial negativa não existe mais ZI
@@ -1128,75 +1283,80 @@ shapiro.test(nb.glm$residuals)
 # Vamos seguir com um modelo binomial negativo
 
 
-## Multilevel Binomial: efeitos aleatórios-----------------------------------------------------
 
-nbin.glmm <- glmmTMB(formula = produzido100 ~ dia +
-                       PC1.cnes+PC2.cnes+PC3.cnes+
-                       PC4.cnes+PC5.cnes+PC6+
-                       vinc_sus+nivate_a+nivate_h+
-                       urgemerg+atendamb+centrcir+
-                       centrobs+centrneo+atendhos + 
-                       PC1.mun+PC2.mun+PC3.mun+PC4.mun+
-                       PC5.mun +
-                       (1 | idcnes) + (1 | id_mun_pct),
-                     family = nbinom2, 
-                     data = df_f)
-
-summary(nbin.glmm)
-logLik(nbin.glmm)
-
-# binomial negativa não corrigiu o problema de superdispersao
-# continuamos o modelo
-performance::check_zeroinflation(nbin.glmm)
-performance::check_overdispersion(nbin.glmm)
-
-
-
-# Multinível Binomial Neg: One level --------------------------------------
-
-glimpse(df_f)
+# Multinível Binomial Neg --------------------------------------
 
 # paste(names(df_f), collapse = "+")
 # using only one level
-nbin.glmm.var1 <- glmmTMB(formula = produzido100 ~ dia +
+nbin.glmm.var1 <- glmmTMB(formula = produzido100 ~ ano +
                            PC1.mun+PC2.mun+PC3.mun+PC4.mun+
                               PC5.mun +
-                           (PC1.cnes+PC2.cnes+PC3.cnes+
+                           PC1.cnes+PC2.cnes+PC3.cnes+
                            PC4.cnes+PC5.cnes+PC6+
-                           vinc_sus+nivate_a+nivate_h+
-                           urgemerg+atendamb+centrcir+
-                           centrobs+centrneo+atendhos| idcnes),
+                           vinc_sus+PC1.mun:ano+PC2.mun:ano+
+                            PC3.mun:ano+PC4.mun:ano+
+                            PC5.mun:ano+PC1.cnes:ano+PC2.cnes:ano+
+                            PC3.cnes:ano+PC4.cnes:ano+PC5.cnes:ano+
+                            PC6:ano+
+                            vinc_sus:ano+(ano|idcnes)+(ano|id_mun),
                         family = nbinom2, 
                         ziformula = ~0,
-                        data = df_f)
+                        data = df_f,
+                        control = glmmTMBControl(rank_check = "adjust"))
 
 
 summary(nbin.glmm.var1)
 logLik(nbin.glmm.var1)
 
+diagnose(fit = nbin.glmm.var1)
 
 
-# Multinível Binomial Neg: Two level --------------------------------------
 
-glimpse(df_f)
+# Multinível Binomial Neg 2 --------------------------------------
 
-# paste(names(df_f), collapse = "+")
-# using only one level
-nbin.glmm.var <- glmmTMB(formula = produzido100 ~ dia +
-                           (PC1.cnes+PC2.cnes+PC3.cnes+
-                              PC4.cnes+PC5.cnes+PC6+
-                              vinc_sus+nivate_a+nivate_h+
-                              urgemerg+atendamb+centrcir+
-                              centrobs+centrneo+atendhos| idcnes),
-                           (PC1.mun+PC2.mun+PC3.mun+PC4.mun+
-                              PC5.mun | id_mun_pct)+
-                         family = nbinom2, 
-                         ziformula = ~0,
-                         data = df_f)
+  m.nb <-df_f %>% 
+    mutate(
+      ano = ano-min(ano)
+    ) %>% 
+  lme4::glmer.nb(produzido100 ~ ano +
+                     PC1.mun+PC2.mun+PC3.mun+PC4.mun+
+                     PC5.mun +
+                     PC1.cnes+PC2.cnes+PC3.cnes+
+                     PC4.cnes+PC5.cnes+PC6+
+                     PC1.mun:ano+PC2.mun:ano+
+                     PC3.mun:ano+PC4.mun:ano+
+                     PC5.mun:ano+PC1.cnes:ano+PC2.cnes:ano+
+                     PC3.cnes:ano+PC4.cnes:ano+PC5.cnes:ano+
+                     PC6:ano+(ano|idcnes)+(ano|id_mun),
+                    data=.,
+                    verbose=TRUE)
 
 
-summary(nbin.glmm.var)
-logLik(nbin.glmm.var)
+summary(m.nb)
+logLik(m.nb)
+performance::check_zeroinflation(m.nb)
+performance::check_overdispersion(m.nb)
+
+
+m.nb2 <-df_f %>% 
+  mutate(
+    ano = ano-min(ano)
+  ) %>% 
+  lme4::glmer.nb(produzido100 ~ ano +
+                   PC1.mun+PC2.mun+PC3.mun+PC4.mun+
+                   PC5.mun +
+                   PC1.cnes+PC2.cnes+PC3.cnes+
+                   PC4.cnes+PC5.cnes+PC6+
+                   PC1.mun:ano+PC2.mun:ano+
+                   PC3.mun:ano+PC4.mun:ano+
+                   PC5.mun:ano+PC1.cnes:ano+PC2.cnes:ano+
+                   PC3.cnes:ano+PC4.cnes:ano+PC5.cnes:ano+
+                   PC6:ano+(ano|idcnes)+(ano|id_mun), data=.,
+                 verbose=TRUE)
+
+
+diagnose(fit = m.nb)
+
 
 
 #Decréscimo nos LL's dos modelos

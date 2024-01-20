@@ -1,36 +1,15 @@
-# Trabalho de conclusão de curso
+---
+title: Trabalho de conclusão de curso
+subtitle: Modelo misto para o número de procedimentos ambulatoriais na Grande São Paulo
+author: Thomas Nogueira Vilches
+date: 2023-01-20
+---
 
-Thomas Nogueira Vilches
+Este repositório foi criado para armazenar o trabalho feito por Thomas Nogueira Vilches em seu MBA em _Data Science and Analytics_.
 
+## Base de dados
 
-# DB Creation
-## TO DO
+Foi construida uma base de dados relacional disponível no arquivo *database.sql*.
 
-- CNES:
-  - Organizar os índices do que já foi adicionado
-  - Concatenar com os municipios IBGE  - ok
-  - Criar tabela com webscraping do dicionario da Fiocruz - *Não necessário agora*
-  - Pegar códigos de Regiões, micro regiões, etc - *Não necessário agora*
-- Cidades
-  - Dados IBGE
-    - Idade OK
-    - Sexo OK
-    - Alfabetizacao OK
-    - Cor/Raça OK
-    - Renda OK
-    - Outros?
-- Dados SIA-PA
-  - Substituir os índices com as tabelas consolidadas ok
-  - arrumar as datas OK
-  - Falta adicionar os dados
-  - Base está ficando grande
-- *GERAL*
-  - Consolidar o diagrama com a modelagem da base relacional
-  
-  ## Workflow
-  
-  - Leitura_atb: tabelas auxiliares de atributos SIA-PA
-  - IBGE: processa dados IBGE
-  - CNES: processa os dados CNES
-  - data_extraction: processa os dados SIA-PA
-  
+O modelo relacional da base será construído futuramente e disponibilizado neste mesmo repositório.
+
