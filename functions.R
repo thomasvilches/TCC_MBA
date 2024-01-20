@@ -99,7 +99,7 @@ append_sia <- function(x, db){
   # 41 - Quantidade Produzida
   # 42 - QUantidade aprovada
   
-  col_int <- c(1, 14, 15, 16, 30, 40, 41, 42)
+  col_int <- c(1, 4, 14, 15, 16, 30, 40, 41, 42)
   
   # names(dados_raw)[4]
   
@@ -110,9 +110,16 @@ append_sia <- function(x, db){
   IBGE_cidades <- IBGE_cidades %>% 
     select(idmun, codibge_mod)
   
-  dados <- dados_raw %>% 
+    dados <- dados_raw %>% 
     select(all_of(col_int)) %>% 
-    filter(PA_MUNPCN %in% municipios$codibge_mod) %>%
+    left_join(IBGE_cidades, by = c("PA_UFMUN" = "codibge_mod"))
+  
+    if(any(is.na(dados$idmun))) stop("estab sem municipio")
+  
+    dados <- dados %>% select(-idmun)  
+  
+    dados <- dados %>% 
+    filter(PA_UFMUN %in% municipios$codibge_mod | PA_MUNPCN %in% municipios$codibge_mod) %>%
     rename(codcid = PA_CIDPRI) %>% 
     trocar_id(con, ., "codcid", "idcid", "cid") %>% # okay, tudo lá
     rename(id_cid_prim = idcid) %>% 
@@ -144,7 +151,7 @@ append_sia <- function(x, db){
     ) %>% 
     # select(-PA_MVM, -PA_CMP, -PA_MUNPCN, -PA_UFMUN, -PA_TPUPS,
     #        -PA_CNPJCPF) %>% 
-    select(-PA_MVM, -PA_CMP, -PA_MUNPCN) %>% 
+    select(-PA_MVM, -PA_CMP, -PA_MUNPCN, -PA_UFMUN) %>% 
     rename(
       cnes = PA_CODUNI,
       # tpfin = PA_TPFIN,
@@ -173,6 +180,7 @@ append_sia <- function(x, db){
   dados <- dados %>% 
     trocar_id(con, ., "cnes", "idcnes", "estabelecimento")
   
+  if(any(is.na(dados$idcnes))) stop("cnes nao encontrado")
   
   dados <- dados %>% 
     group_by(idcnes, id_proc, id_mun_pct, dt_realiz, dt_proces, id_cid_prim) %>% 
