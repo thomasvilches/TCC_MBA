@@ -4,7 +4,9 @@ source("packages.R", encoding = "UTF-8")
 source("functions.R", encoding = "UTF-8")
 
 
-
+library(glmmTMB)
+library(kableExtra)
+library(broom)
 #* leitura da DB -----------------------------------------------------------
 
 db <- conecta_base()
@@ -1214,8 +1216,6 @@ glimpse(df_f)
 ## Poisson -----------------------------------------------------------------
 
 
-library(glmmTMB)
-
 names(df_f)
 poisson.glm <- glm(produzido100 ~ ano,
                    data = df_f,
@@ -1268,21 +1268,56 @@ nb.glm2 <- glmmTMB(formula = produzido100 ~ ano +
                        data = df_f
 )
 
+nb.glm3 <- glmmTMB(formula = produzido100 ~ ano +
+                         PC1.cnes+PC2.cnes+
+                         PC1.mun+PC2.mun+PC3.mun+PC4.mun+
+                         PC5.mun,
+                        family = nbinom2,
+                  ziformula = ~0,
+                       data = df_f
+)
+
+nb.glm4 <- glmmTMB(formula = produzido100 ~ PC1.cnes+PC2.cnes+
+                         PC1.mun+PC2.mun+PC3.mun+PC4.mun+
+                         PC5.mun,
+                        family = nbinom2,
+                  ziformula = ~0,
+                       data = df_f
+)
+
 #Observando os parâmetros do modelo
+summary(nb.glm)
 summary(nb.glm2)
+summary(nb.glm3)
+summary(nb.glm4)
 
 #Extração do valor do LL
+logLik(nb.glm)
 logLik(nb.glm2)
-
+logLik(nb.glm3)
+logLik(nb.glm4)
 
 # Utilizando a binomial negativa não existe mais ZI
+performance::check_overdispersion(nb.glm)
 performance::check_zeroinflation(nb.glm)
 
-shapiro.test(nb.glm$residuals)
+shapiro.test(nb.glm2$residuals)
 
 # Vamos seguir com um modelo binomial negativo
 
+s <- summary(nb.glm2)
 
+s$coefficients$cond %>% 
+  as.data.frame() %>% 
+  mutate_all(list(~round(., digits = 3))) %>%
+  clipr::write_clip()
+
+s <- summary(nb.glm4)
+
+s$coefficients$cond %>% 
+  as.data.frame() %>% 
+  mutate_all(list(~round(., digits = 3))) %>%
+  clipr::write_clip()
 
 # Multinível Binomial Neg --------------------------------------
 
@@ -1332,11 +1367,87 @@ diagnose(fit = nbin.glmm.var1)
                     verbose=TRUE)
 
 
+  m.nb <-df_f %>% 
+    mutate(
+      ano = ano-min(ano)
+    ) %>% 
+  lme4::glmer.nb(produzido100 ~ ano +
+                     PC1.mun+PC2.mun+PC3.mun+PC4.mun+
+                     PC5.mun +
+                     PC1.cnes+PC2.cnes+
+                     PC1.mun:ano+PC2.mun:ano+
+                     PC3.mun:ano+PC4.mun:ano+
+                     PC5.mun:ano+PC1.cnes:ano+PC2.cnes:ano+
+                    (ano|idcnes)+(ano|id_mun),
+                    data=.,
+                    verbose=TRUE)
+
+
 summary(m.nb)
 logLik(m.nb)
 performance::check_zeroinflation(m.nb)
 performance::check_overdispersion(m.nb)
+nlme::random.effects(m.nb)
+anova(m.nb)
 
+
+m.nbA <-df_f %>% 
+  mutate(
+    ano = ano-min(ano)
+  ) %>% 
+  lme4::glmer.nb(produzido100 ~ ano +
+                   PC1.mun+PC2.mun+
+                   PC2.cnes+
+                   PC1.mun:ano+PC2.mun:ano+
+                   PC2.cnes:ano+
+                   (ano|idcnes)+(ano|id_mun),
+                 data=.,
+                 verbose=TRUE)
+
+
+summary(m.nbA)
+logLik(m.nbA)
+performance::check_zeroinflation(m.nbA)
+performance::check_overdispersion(m.nbA)
+nlme::random.effects(m.nbA)
+anova(m.nbA)
+
+
+m.nbA <-df_f %>% 
+  mutate(
+    ano = ano-min(ano)
+  ) %>% 
+  lme4::glmer.nb(produzido100 ~ PC1.mun+PC2.mun+
+                   PC2.cnes+
+                   (1|idcnes)+(1|id_mun),
+                 data=.,
+                 verbose=TRUE)
+
+
+summary(m.nbA)
+logLik(m.nbA)
+performance::check_zeroinflation(m.nbA)
+performance::check_overdispersion(m.nbA)
+nlme::random.effects(m.nbA)
+anova(m.nbA)
+
+
+m.nbA <-df_f %>% 
+  mutate(
+    ano = ano-min(ano)
+  ) %>% 
+  lme4::glmer.nb(produzido100 ~ 
+                   (1|idcnes)+(1|id_mun),
+                 data=.,
+                 verbose=TRUE)
+
+
+summary(m.nbA)
+logLik(m.nbA)
+performance::check_zeroinflation(m.nbA)
+performance::check_overdispersion(m.nbA)
+nlme::random.effects(m.nbA)
+anova(m.nbA)
 
 m.nb2 <-df_f %>% 
   mutate(
@@ -1356,6 +1467,71 @@ m.nb2 <-df_f %>%
 
 
 diagnose(fit = m.nb)
+
+
+
+m.nb3 <-df_f %>% 
+  mutate(
+    ano = ano-min(ano)
+  ) %>% 
+  lme4::glmer.nb(produzido100 ~ ano +
+                   PC1.mun+PC2.mun+PC3.mun+
+                   PC1.cnes+PC2.cnes+
+                   PC1.mun:ano+PC2.mun:ano+
+                   PC3.mun:ano+PC1.cnes:ano+PC2.cnes:ano+
+                   (ano|idcnes)+(ano|id_mun), data=.,
+                 verbose=TRUE)
+
+
+summary(m.nb3)
+logLik(m.nb3)
+performance::check_zeroinflation(m.nb3)
+performance::check_overdispersion(m.nb3)
+nlme::random.effects(m.nb3)
+anova(m.nb3)
+
+m.nb4 <-df_f %>% 
+  mutate(
+    ano = ano-min(ano)
+  ) %>% 
+  glmmTMB(produzido100 ~ ano +
+                   PC1.mun+PC2.mun+PC3.mun+
+                   PC1.cnes+PC2.cnes+
+                   PC1.mun:ano+PC2.mun:ano+
+                   PC3.mun:ano+PC1.cnes:ano+PC2.cnes:ano+
+                   (ano|idcnes)+(ano|id_mun), data=.,
+          family = nbinom2, 
+                  ziformula = ~1,
+                 verbose=TRUE)
+
+
+summary(m.nb4)
+logLik(m.nb4)
+performance::check_zeroinflation(m.nb4)
+performance::check_overdispersion(m.nb4)
+nlme::random.effects(m.nb4)
+anova(m.nb4)
+
+
+m.nb4 <-df_f %>% 
+  mutate(
+    ano = ano-min(ano)
+  ) %>% 
+  glmmTMB(produzido100 ~
+            PC1.mun+PC2.mun+
+            PC2.cnes+PC1.cnes+
+            (1|idcnes)+(1|id_mun), data=.,
+          family = nbinom2, 
+          ziformula = ~1,
+          verbose=TRUE)
+
+
+summary(m.nb4)
+logLik(m.nb4)
+performance::check_zeroinflation(m.nb4)
+performance::check_overdispersion(m.nb4)
+nlme::random.effects(m.nb4)
+anova(m.nb4)
 
 
 
