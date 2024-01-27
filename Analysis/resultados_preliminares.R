@@ -1432,7 +1432,8 @@ nlme::random.effects(m.nbA)
 anova(m.nbA)
 
 
-m.nbA <-df_f %>% 
+m.nbA <-df_f %>%
+  filter(ano > 2014) %>% 
   mutate(
     ano = ano-min(ano)
   ) %>% 
@@ -1490,49 +1491,86 @@ performance::check_overdispersion(m.nb3)
 nlme::random.effects(m.nb3)
 anova(m.nb3)
 
-m.nb4 <-df_f %>% 
-  mutate(
-    ano = ano-min(ano)
-  ) %>% 
-  glmmTMB(produzido100 ~ ano +
-                   PC1.mun+PC2.mun+PC3.mun+
-                   PC1.cnes+PC2.cnes+
-                   PC1.mun:ano+PC2.mun:ano+
-                   PC3.mun:ano+PC1.cnes:ano+PC2.cnes:ano+
-                   (ano|idcnes)+(ano|id_mun), data=.,
-          family = nbinom2, 
-                  ziformula = ~1,
-                 verbose=TRUE)
 
-
-summary(m.nb4)
-logLik(m.nb4)
-performance::check_zeroinflation(m.nb4)
-performance::check_overdispersion(m.nb4)
-nlme::random.effects(m.nb4)
-anova(m.nb4)
-
-
-m.nb4 <-df_f %>% 
+m.nb4 <-df_f %>%
+  filter(ano > 2014) %>% 
   mutate(
     ano = ano-min(ano)
   ) %>% 
   glmmTMB(produzido100 ~
             PC1.mun+PC2.mun+
-            PC2.cnes+PC1.cnes+
+            PC2.cnes+
             (1|idcnes)+(1|id_mun), data=.,
           family = nbinom2, 
           ziformula = ~1,
           verbose=TRUE)
 
 
-summary(m.nb4)
+s <- summary(m.nb4)
+s
+
+s$coefficients$cond %>% 
+  as.data.frame() %>% 
+  mutate_all(list(~round(., digits = 3))) %>%
+  clipr::write_clip()
+
 logLik(m.nb4)
 performance::check_zeroinflation(m.nb4)
 performance::check_overdispersion(m.nb4)
 nlme::random.effects(m.nb4)
 anova(m.nb4)
 
+re <- nlme::random.effects(m.nb4)
+
+re$cond$idcnes
+
+n <- rownames(re$cond$idcnes)
+v <- as.vector(re$cond$idcnes[,1])
+
+p1 <- data.frame(Index = as.integer(n), v, x = seq(1, length(n))) %>%
+  left_join(estabelecimento, by = c("Index" = "idcnes")) %>%
+  left_join(select(dados_mun, id_mun, cluster), by = c("id_mun" = "id_mun")) %>% 
+  ggplot()+
+  geom_col(aes(y = as.factor(x), x = v, color = as.factor(cluster),
+               fill =  as.factor(cluster)))+
+  scale_color_manual(values = paleta[c(1, 2,3,4,7,5)]) +
+  scale_fill_manual(values = paleta[c(1, 2,3,4,7,5)]) +
+  labs(x = latex2exp::TeX("\\nu$_0$"), color = "Grupo", fill = "Grupo", title = "A")+
+  tema+
+  theme(
+    axis.title.y = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+    plot.title = element_text(size = 16, face = "bold")
+  )
+p1
+
+n <- rownames(re$cond$id_mun)
+v <- as.vector(re$cond$id_mun[,1])
+
+p2 <- data.frame(Index = as.integer(n), v, x = seq(1, length(n))) %>%
+  left_join(mun_int, by = c("Index" = "id_mun")) %>% 
+  left_join(select(dados_mun, id_mun, cluster), by = c("Index" = "id_mun")) %>% 
+  ggplot()+
+  geom_col(aes(y = cidade, x = v, color = as.factor(cluster),
+               fill =  as.factor(cluster)))+
+  scale_color_manual(values = paleta[c(1, 2,3,4,7,5)]) +
+  scale_fill_manual(values = paleta[c(1, 2,3,4,7,5)]) +
+  labs(x = latex2exp::TeX("\\tau$_0$"), color = "Grupo", fill = "Grupo", title = "B")+
+  tema+
+  theme(
+    axis.title.y = element_blank(),
+    # axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+    plot.title = element_text(size = 16, face = "bold")
+  )
+p2
+
+
+ggpubr::ggarrange(p1, NULL,p2, widths = c(0.45, 0.05, 0.65),
+                  nrow = 1, common.legend = TRUE, legend = "bottom")
+
+ggsave("plots/random_ef.png", device = "png", dpi = 300, width = 8, height = 5)
 
 
 #Decréscimo nos LL's dos modelos
