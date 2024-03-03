@@ -9,7 +9,7 @@ Este repositório foi criado para armazenar o trabalho feito por Thomas Nogueira
 
 ## Base de dados
 
-Foi construida uma base de dados relacional disponível no arquivo *database.sql*.
+Foi construida uma base de dados relacional disponível no arquivo *database.sql* em https://drive.google.com/file/d/1PfeadRbk4zzgGuSbHBPh5HqVxIO5YbVM/view?usp=sharing. O arquivo neste repositorio esta desatualizado
 
 O modelo relacional da base será construído futuramente e disponibilizado neste mesmo repositório.
 
