@@ -194,12 +194,12 @@ df %>%
 df %>%
   select(-1) %>%
   fviz_nbclust(kmeans, method = "silhouette") +
-  labs(
-    x = "Número de agrupamentos", y = "Largura média da silhueta",
-    title = "Número ótimo de agrupamentos"
-  ) +
+  # labs(
+  #   x = "Número de agrupamentos", y = "Largura média da silhueta",
+  #   title = "Número ótimo de agrupamentos"
+  # ) +
   geom_vline(xintercept = 6, linetype = "dotted") +
-  scale_y_continuous(labels = virgula) +
+  #scale_y_continuous(labels = virgula) +
   tema +
   theme(
     plot.title = element_blank()
@@ -262,6 +262,21 @@ df_f %>%
 
 ggsave("plots/agrupamento.png", device = "png", dpi = 300, width = 4.5, height = 4)
 
+
+df_f %>%
+  as.data.frame() %>%
+  ggplot() +
+  geom_point(aes(x = PC1, y = PC2, color = cluster, fill = cluster), shape = 21, size = 2, stroke = 1) +
+  scale_color_manual(values = paleta) +
+  geom_polygon(data = hull, aes(x = PC1, y = PC2, color = cluster, fill = cluster), alpha = 0) +
+  scale_fill_manual(values = scales::alpha(c(paleta), 0.5)) +
+  labs(color = "Cluster", fill = "Cluster") +
+  tema
+
+
+ggsave("plots/agrupamento_en.png", device = "png", dpi = 300, width = 4.5, height = 4)
+
+
 df_mun <- df_f
 
 dir.create("outputs")
@@ -269,7 +284,10 @@ write.csv(df_mun, "outputs/result_pca_mun.csv")
 
 ## Gráfico variáveis     ------------------------
 
-dados$cluster <- as.factor(k6$cluster)
+pca_mun <- read.csv("outputs/result_pca_mun.csv")
+
+dados$cluster <- as.factor(pca_mun$cluster)
+dim(dados)
 
 niveis <- names(dados)[-c(1, 30)]
 
@@ -305,6 +323,65 @@ p <- dados %>%
     panel.spacing = unit(1.2, "lines")
   )
 ggsave("plots/agrupamento_medidas.png", plot = p, device = "png", dpi = 300, width = 11, height = 7)
+ggsave("plots/agrupamento_medidas.svg", plot = p, device = "svg", dpi = 300, width = 11, height = 7)
+
+
+dados %>%
+  pivot_longer(2:29, names_to = "Variável", values_to = "Valor")  %>%pull(Variável) %>%unique
+
+
+dfref <- read_any(db, "ref_idades") %>%
+  select(idade_pt, idade_en) %>%
+  rename(PT = 1, EN = 2) %>%
+  bind_rows(
+    read_any(db, "ref_raca") %>%
+    select(raca_pt, raca_en) %>%
+    rename(PT = 1, EN = 2)
+  ) %>%
+    bind_rows(
+      read_any(db, "ref_renda") %>%
+      select(renda_pt, renda_en) %>%
+      rename(PT = 1, EN = 2)
+    ) %>%
+  bind_rows(
+    data.frame(
+      PT = "Proporção de alfabetizados", EN = "Proportion of literate"
+    )
+  )
+
+  levels_r = dfref$EN
+  names(levels_r) <- dfref$PT
+
+p <- dados %>%
+  pivot_longer(2:29, names_to = "Variável", values_to = "Valor") %>%
+  group_by(cluster, Variável) %>%
+  summarise(Média_grupo = mean(Valor)) %>%
+  left_join(df_aux) %>%
+  left_join(dfref, by = c("Variável" = "PT")) %>%
+  mutate(
+    Desvio = (Média_grupo - Média) / desv
+  ) %>%
+  mutate(
+    EN = factor(EN, levels = levels_r[niveis])
+  ) %>%
+  ggplot() +
+  geom_col(aes(x = Desvio, y = EN, fill = cluster), color = "black") +
+  facet_wrap(. ~ cluster, scales = "free_x", nrow = 1) +
+  labs(color = "Cluster", fill = "Cluster", x = "Standardized difference of means", y = "Variable")+
+  #scale_x_continuous(labels = virgula) +
+  rcartocolor::scale_color_carto_d(palette = "Bold")+
+  rcartocolor::scale_fill_carto_d(palette = "Bold")+
+  tema +
+  theme(
+    legend.position = "bottom",
+    axis.text.y = element_text(size = 12),
+    axis.text.x = element_text(size = 12, angle = 45, hjust = 1.0),
+    strip.text = element_blank(),
+    panel.spacing = unit(1.2, "lines")
+  )
+ggsave("plots/agrupamento_medidas_en.png", plot = p, device = "png", dpi = 300, width = 11, height = 7)
+ggsave("plots/agrupamento_medidas.svg", plot = p, device = "svg", dpi = 300, width = 11, height = 7)
+
 
 ## Mapa grupos   ------------------------
 
@@ -343,6 +420,32 @@ dados %>%
 
 
 ggsave("plots/map_clusters.png", device = "png", dpi = 300, width = 9, height = 6)
+ggsave("plots/map_clusters.svg", device = "svg", dpi = 300, width = 9, height = 6)
+
+
+dados %>%
+  select(id_mun, cluster) %>%
+  left_join(sp) %>%
+  ggplot() +
+  geom_sf(aes(geometry = geometry, fill = cluster)) +
+  rcartocolor::scale_fill_carto_d(palette = "Bold")+
+  labs(fill = "Cluster", x = "Longitude", y = "Latitude") +
+  #scale_x_continuous(labels = virgula) +
+  #scale_y_continuous(labels = virgula) +
+  # scale_fill_manual(values = scales::alpha(c(paleta), 1))+
+  tema +
+  # guides(fill = guide_colourbar(
+  #   title.position = "top",
+  #   title.hjust = 0.5, barwidth = 10, barheight = 1
+  # )) +
+  theme(
+    legend.position = "bottom",
+    legend.direction = "horizontal"
+  )
+
+
+
+ggsave("plots/map_clusters_en.png", device = "png", dpi = 300, width = 9, height = 6)
 
 
 dados %>%
@@ -439,9 +542,12 @@ names(cities)
 names(estabelecimento)
 names(cnes)
 
+
 df <- cnes %>%
   left_join(estabelecimento, by = c("id_cnes" = "idcnes")) %>%
   left_join(cities, by = c("id_mun" = "idmun"))
+
+names(df)
 
 df %>%
   group_by(id_mun, cidade, ano) %>%
@@ -571,6 +677,69 @@ p1 <- df %>%
 ggpubr::ggarrange(pm, NULL,p1, widths = c(1, 0.05, 0.5), nrow = 1)
 
 ggsave("plots/juntos.png", device = "png", dpi = 300, width = 10.5, height = 4.0)
+
+
+
+df %>%
+  filter(id_mun %in% mun_int$id_mun) %>% 
+  group_by(id_mun, cidade, codibge, ano) %>%
+  summarise(
+    n = length(unique(id_cnes))
+  ) %>%
+  left_join(pop, by = "id_mun") %>%
+  left_join(
+    pca_mun %>%
+      select(id_mun, cluster)
+  ) %>%
+  ungroup() %>%
+  mutate(
+    prop = n * 100000 / total,
+    ano = factor(ano)
+  ) %>%
+  ggplot(aes(x = factor(cluster), y = prop, color = factor(cluster)))+
+  geom_jitter(alpha = 0.5, width = 0.2)+
+  geom_boxplot(width = 0.2, linewidth = 1.1, alpha = 0.0)+
+  labs(x = "Grupo", y = "Número de estabelecimentos\npor\n100 mil habitantes")+
+  rcartocolor::scale_color_carto_d(palette = "Bold")+
+  tema+
+  theme(
+    legend.position = "none"
+  )
+
+  ggsave("plots/boxplot_estab.svg", device = "svg", dpi = 300, width = 7, height = 4.0)
+  ggsave("plots/boxplot_estab.png", device = "png", dpi = 300, width = 7, height = 4.0)
+
+  
+
+df %>%
+  filter(id_mun %in% mun_int$id_mun) %>% 
+  group_by(id_mun, cidade, codibge, ano) %>%
+  summarise(
+    n = length(unique(id_cnes))
+  ) %>%
+  left_join(pop, by = "id_mun") %>%
+  left_join(
+    pca_mun %>%
+      select(id_mun, cluster)
+  ) %>%
+  ungroup() %>%
+  mutate(
+    prop = n * 100000 / total,
+    ano = factor(ano)
+  ) %>%
+  ggplot(aes(x = factor(cluster), y = prop, color = factor(cluster)))+
+  geom_jitter(alpha = 0.5, width = 0.2)+
+  geom_boxplot(width = 0.2, linewidth = 1.1, alpha = 0.0)+
+  labs(x = "Cluster", y = "Number of facilities\nper\n100,000 inhabitants")+
+  rcartocolor::scale_color_carto_d(palette = "Bold")+
+  tema+
+  theme(
+    legend.position = "none"
+  )
+
+  ggsave("plots/boxplot_estab_en.png", device = "png", dpi = 300, width = 5, height = 4.0)
+
+
 
 
 df %>%
